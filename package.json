@@ -1,0 +1,36 @@
+{
+  "name": "cosmos-voting-bot",
+  "version": "1.0.0",
+  "description": "A Telegram bot for voting on Cosmos SDK network proposals",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "nodemon src/index.ts",
+    "build": "tsc",
+    "watch": "tsc -w"
+  },
+  "keywords": [
+    "cosmos",
+    "telegram",
+    "bot",
+    "voting",
+    "sdk"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@cosmjs/stargate": "^0.32.4",
+    "@cosmjs/proto-signing": "^0.32.4",
+    "axios": "^1.7.7",
+    "dedent": "^1.5.3",
+    "dotenv": "^16.4.5",
+    "pg": "^8.13.0",
+    "node-telegram-bot-api": "^0.66.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7",
+    "typescript": "^5.6.2",
+    "@types/node": "^22.7.4",
+    "@types/pg": "^8.11.10"
+  }
+}
