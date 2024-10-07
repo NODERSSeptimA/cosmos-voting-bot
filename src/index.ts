@@ -10,7 +10,7 @@ import * as fs from 'fs';
 // Telegram Bot Token
 const BOT_TOKEN = process.env.BOT_TOKEN!;
 const CHAT_ID = process.env.CHAT_ID!;
-const bot = new TelegramBot(BOT_TOKEN, {polling: true});
+const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 // PostgreSQL client
 const dbClient = new Client({
@@ -23,9 +23,9 @@ const dbClient = new Client({
 dbClient.connect();
 
 // Load network configuration from networks.json
-const networks = JSON.parse(fs.readFileSync('../networks.json', 'utf-8'));
+const networks: { name: string; rpcEndpoint: string; prefix: string; denom: string; gasPrice: string; chainId: string }[] = JSON.parse(fs.readFileSync('../networks.json', 'utf-8'));
 
-const MNEMONIC = process.env.MNEMONIC; // Wallet mnemonic for signing transactions
+const MNEMONIC = process.env.MNEMONIC!;
 
 // Enum for vote button text
 enum VoteButtons {
@@ -60,10 +60,10 @@ async function fetchProposals(rpcEndpoint: string) {
 // Function to send a vote transaction
 async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string, proposalId: number, option: string) {
   try {
-    const wallet = await DirectSecp256k1HdWallet.fromMnemonic(MNEMONIC, {prefix});
+    const wallet = await DirectSecp256k1HdWallet.fromMnemonic(MNEMONIC, { prefix });
     const [account] = await wallet.getAccounts();
     const gasPrice = GasPrice.fromString(gasPriceString);
-    const client = await SigningStargateClient.connectWithSigner(rpcEndpoint, wallet, {gasPrice});
+    const client = await SigningStargateClient.connectWithSigner(rpcEndpoint, wallet, { gasPrice });
 
     let voteOption;
     switch (option) {
@@ -95,7 +95,7 @@ async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string,
     return result;
   } catch (error) {
     console.error('Error voting:', error);
-    return {code: 1, error}; // Return an error if failed
+    return { code: 1, error };
   }
 }
 
@@ -127,7 +127,7 @@ async function handleNewProposal(network: any, chainId: string, proposal: any) {
           },
           {
             text: VoteButtons.No,
-            callback_data: JSON.stringify({action: 'vote', option: 'no', network: network.name, proposalId})
+            callback_data: JSON.stringify({ action: 'vote', option: 'no', network: network.name, proposalId })
           },
         ],
         [
@@ -164,9 +164,9 @@ async function handleNewProposal(network: any, chainId: string, proposal: any) {
 }
 
 // Button click handler
-bot.on('callback_query', async (callbackQuery) => {
-  const data = JSON.parse(callbackQuery.data);
-  const {action, option, network: networkName, proposalId} = data;
+bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
+  const data = JSON.parse(callbackQuery.data!);
+  const { action, option, network: networkName, proposalId } = data;
 
   if (action === 'vote') {
     const network = networks.find((net) => net.chainId === networkName);
@@ -242,7 +242,7 @@ bot.on('callback_query', async (callbackQuery) => {
 });
 
 // Handler for utility commands
-bot.onText(/\/networks/, (msg) => {
+bot.onText(/\/networks/, (msg: TelegramBot.Message) => {
   const networkList = networks.map((network) => `- ${network.name}`).join('\n');
   bot.sendMessage(msg.chat.id, dedent(`
     Supported networks:
@@ -250,7 +250,7 @@ bot.onText(/\/networks/, (msg) => {
   `));
 });
 
-bot.onText(/\/active_proposals/, async (msg) => {
+bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
   let activeProposalsMessage = 'List of active proposals in all networks:\n';
 
   for (const network of networks) {
