@@ -1,11 +1,12 @@
 import TelegramBot from 'node-telegram-bot-api';
-import { GasPrice, SigningStargateClient } from '@cosmjs/stargate';
+import { GasPrice, makeCosmoshubPath, SigningStargateClient } from '@cosmjs/stargate';
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing';
 import axios from 'axios';
 import { Client } from 'pg';
 import dedent from 'dedent';
 import 'dotenv/config';
 import * as fs from 'fs';
+import { Network } from './types';
 
 // Telegram Bot Token
 const BOT_TOKEN = process.env.BOT_TOKEN!;
@@ -23,7 +24,7 @@ const dbClient = new Client({
 dbClient.connect();
 
 // Load network configuration from networks.json
-const networks: { name: string; rpcEndpoint: string; prefix: string; denom: string; gasPrice: string; chainId: string }[] = JSON.parse(fs.readFileSync('../networks.json', 'utf-8'));
+const networks: Network[] = JSON.parse(fs.readFileSync('../networks.json', 'utf-8'));
 
 const MNEMONIC = process.env.MNEMONIC!;
 
@@ -33,17 +34,6 @@ enum VoteButtons {
   No = '👎 No',
   NoWithVeto = '❌ No with Veto',
   Abstain = '🤷‍♂️ Abstain'
-}
-
-// Function to fetch chain-id
-async function fetchChainId(rpcEndpoint: string) {
-  try {
-    const response = await axios.get(`${rpcEndpoint}/status`);
-    return response.data.result.node_info.network;
-  } catch (error) {
-    console.error('Error fetching chain-id:', error);
-    return null;
-  }
 }
 
 // Function to fetch the list of proposals
@@ -58,9 +48,10 @@ async function fetchProposals(rpcEndpoint: string) {
 }
 
 // Function to send a vote transaction
-async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string, proposalId: number, option: string) {
+async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string, proposalId: number, option: string, coinType: number) {
   try {
-    const wallet = await DirectSecp256k1HdWallet.fromMnemonic(MNEMONIC, { prefix });
+    const hdPath = makeCosmoshubPath(coinType);
+    const wallet = await DirectSecp256k1HdWallet.fromMnemonic(MNEMONIC, { prefix, hdPaths: [hdPath] });
     const [account] = await wallet.getAccounts();
     const gasPrice = GasPrice.fromString(gasPriceString);
     const client = await SigningStargateClient.connectWithSigner(rpcEndpoint, wallet, { gasPrice });
@@ -154,7 +145,7 @@ async function handleNewProposal(network: any, chainId: string, proposal: any) {
     }
   };
 
-  bot.sendMessage(CHAT_ID, message, opts);
+  await bot.sendMessage(CHAT_ID, message, opts);
 
   // Save proposal to the database
   await dbClient.query(
@@ -171,13 +162,14 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
   if (action === 'vote') {
     const network = networks.find((net) => net.chainId === networkName);
     if (!network) {
-      bot.sendMessage(callbackQuery.message?.chat.id!, 'Network not found.');
+      await bot.sendMessage(callbackQuery.message?.chat.id!, 'Network not found.');
       return;
     }
 
     const chainId = network.chainId;
+    const coinType = network.coinType ?? 118;
 
-    const result = await vote(network.rpcEndpoint, network.prefix, network.gasPrice, Number(proposalId), option);
+    const result = await vote(network.rpcEndpoint, network.prefix, network.gasPrice, Number(proposalId), option, coinType);
     if (result && result.code === 0) {
       const opts = {
         chat_id: callbackQuery.message?.chat.id!,
@@ -228,7 +220,7 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
         }
       };
 
-      bot.editMessageReplyMarkup(opts.reply_markup, opts);
+      await bot.editMessageReplyMarkup(opts.reply_markup, opts);
 
       // Save or update voting information in the database
       await dbClient.query(
@@ -236,15 +228,15 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
         [chainId, proposalId, option]
       );
     } else {
-      bot.sendMessage(callbackQuery.message?.chat.id!, `Error voting for proposal #${proposalId} in network ${network.name}. Please try again.`);
+      await bot.sendMessage(callbackQuery.message?.chat.id!, `Error voting for proposal #${proposalId} in network ${network.name}. Please try again.`);
     }
   }
 });
 
 // Handler for utility commands
-bot.onText(/\/networks/, (msg: TelegramBot.Message) => {
+bot.onText(/\/networks/, async (msg: TelegramBot.Message) => {
   const networkList = networks.map((network) => `- ${network.name}`).join('\n');
-  bot.sendMessage(msg.chat.id, dedent(`
+  await bot.sendMessage(msg.chat.id, dedent(`
     Supported networks:
     ${networkList}
   `));
@@ -267,7 +259,7 @@ bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
     }
   }
 
-  bot.sendMessage(msg.chat.id, activeProposalsMessage);
+  await bot.sendMessage(msg.chat.id, activeProposalsMessage);
 });
 
 // Function to monitor new proposals
