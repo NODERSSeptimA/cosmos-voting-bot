@@ -113,7 +113,7 @@ async function handleNewProposal(network: any, chainId: string, proposal: any) {
   `);
 
   const opts = {
-    reply_markup: JSON.stringify({
+    reply_markup: {
       inline_keyboard: [
         [
           {
@@ -151,7 +151,7 @@ async function handleNewProposal(network: any, chainId: string, proposal: any) {
           },
         ],
       ],
-    })
+    }
   };
 
   bot.sendMessage(CHAT_ID, message, opts);
@@ -182,7 +182,7 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
       const opts = {
         chat_id: callbackQuery.message?.chat.id!,
         message_id: callbackQuery.message?.message_id,
-        reply_markup: JSON.stringify({
+        reply_markup: {
           inline_keyboard: [
             [
               {
@@ -225,7 +225,7 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
               },
             ],
           ],
-        })
+        }
       };
 
       bot.editMessageReplyMarkup(opts.reply_markup, opts);
