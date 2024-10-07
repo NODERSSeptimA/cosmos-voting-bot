@@ -1,7 +1,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { GasPrice, makeCosmoshubPath, SigningStargateClient } from '@cosmjs/stargate';
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { Client } from 'pg';
 import dedent from 'dedent';
 import 'dotenv/config';
@@ -15,16 +15,15 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 // PostgreSQL client
 const dbClient = new Client({
-  user: process.env.DB_USER,
   host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
   port: parseInt(process.env.DB_PORT || '5432', 10),
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
 });
-dbClient.connect();
 
 // Load network configuration from networks.json
-const networks: Network[] = JSON.parse(fs.readFileSync('../networks.json', 'utf-8'));
+const networks: Network[] = JSON.parse(fs.readFileSync('networks.json', 'utf-8'));
 
 const MNEMONIC = process.env.MNEMONIC!;
 
@@ -37,12 +36,12 @@ enum VoteButtons {
 }
 
 // Function to fetch the list of proposals
-async function fetchProposals(rpcEndpoint: string) {
+async function fetchProposals(apiEndpoint: string): Promise<any[]> {
   try {
-    const response = await axios.get(`${rpcEndpoint}/gov/proposals`);
+    const response = await axios.get(`${apiEndpoint}/cosmos/gov/v1/proposals`);
     return response.data.result;
-  } catch (error) {
-    console.error('Error fetching proposals:', error);
+  } catch (error: AxiosError | any) {
+    console.error('Error fetching proposals:', error.message);
     return [];
   }
 }
@@ -84,8 +83,8 @@ async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string,
     const result = await client.signAndBroadcast(account.address, [voteMsg], 'auto');
     console.log('Transaction result:', result);
     return result;
-  } catch (error) {
-    console.error('Error voting:', error);
+  } catch (error: AxiosError | any) {
+    console.error('Error fetching proposals:', error.message);
     return { code: 1, error };
   }
 }
@@ -246,7 +245,7 @@ bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
   let activeProposalsMessage = 'List of active proposals in all networks:\n';
 
   for (const network of networks) {
-    const proposals = await fetchProposals(network.rpcEndpoint);
+    const proposals = await fetchProposals(network.apiEndpoint);
     const activeProposals = proposals.filter((proposal: any) => proposal.status === 'PROPOSAL_STATUS_VOTING_PERIOD');
     if (activeProposals.length > 0) {
       activeProposalsMessage += dedent(`
@@ -284,7 +283,10 @@ async function monitorProposals() {
   }, 60000); // Check every 60 seconds
 }
 
-// Start the bot and monitoring
-monitorProposals();
+dbClient.connect()
+  .then(() => {
+    console.log('Connected to the database');
 
-console.log('Bot is running and monitoring new proposals...');
+    monitorProposals();
+    console.log('Bot is running and monitoring new proposals...');
+  });

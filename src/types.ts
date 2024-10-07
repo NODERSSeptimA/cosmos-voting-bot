@@ -1,5 +1,6 @@
 export interface Network {
   name: string;
+  apiEndpoint: string;
   rpcEndpoint: string;
   prefix: string;
   denom: string;
