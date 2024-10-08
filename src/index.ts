@@ -37,7 +37,6 @@ async function fetchProposals(apiEndpoint: string): Promise<any[]> {
   }
 }
 
-// Function to send a vote transaction
 async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string, proposalId: number, option: string, coinType: number) {
   try {
     const hdPath = makeCosmoshubPath(coinType);
@@ -75,7 +74,7 @@ async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string,
     console.log('Transaction result:', result);
     return result;
   } catch (error: AxiosError | any) {
-    console.error('Error fetching proposals:', error.message);
+    console.error(`Error voting on prop (${rpcEndpoint}) ${proposalId}:`, error.message);
     return { code: 1, error };
   }
 }
@@ -85,12 +84,14 @@ async function sendProposalMessage(network: Network, proposal: any) {
   const proposalId = proposal.id;
   const proposalTitle = proposal.title.slice(0, 200);
   const proposalDescription = proposal.summary.slice(0, 400);
+  const proposalType = getProposalType(proposal);
 
   const message = dedent(`
-    New proposal in network ${network.name} #${proposalId}
-
-    ${proposalTitle}
-    ${proposalDescription}
+    🌐<b>Network</b> ${network.name}
+    📜<b>Proposal ID:</b> ${proposalId}
+    🗳<b>Type:</b> ${proposalType}
+    📃<b>Title</b> ${proposalTitle}
+    📚<b>Description</b>${proposalDescription}
   `);
 
   const opts = {
@@ -177,7 +178,7 @@ bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
 
   for (const network of networks) {
     const proposals = await fetchProposals(network.apiEndpoint);
-    const activeProposals = proposals; //.filter((proposal: any) => proposal.status === 'PROPOSAL_STATUS_VOTING_PERIOD');
+    const activeProposals = proposals.filter((proposal: any) => proposal.status === 'PROPOSAL_STATUS_VOTING_PERIOD');
     for (const proposal of activeProposals) {
       await sendProposalMessage(network, proposal);
     }
