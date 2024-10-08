@@ -20,10 +20,10 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 const networks: Network[] = JSON.parse(fs.readFileSync('networks.json', 'utf-8'));
 
 enum VoteButtons {
-  Yes = '👍 Yes',
-  No = '👎 No',
-  NoWithVeto = '❌ No with Veto',
-  Abstain = '🤷‍♂️ Abstain'
+  YES = '👍 Yes',
+  NO = '👎 No',
+  NO_WITH_VETO = '❌ No with Veto',
+  ABSTAIN = '🤷‍♂️ Abstain'
 }
 
 // Function to fetch the list of proposals
@@ -80,11 +80,11 @@ async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string,
   }
 }
 
-// Function to handle a new proposal
-async function handleNewProposal(network: any, chainId: string, proposal: any) {
+async function sendProposalMessage(network: Network, proposal: any) {
+  const chainId = network.chainId;
   const proposalId = proposal.id;
-  const proposalTitle = proposal.title;
-  const proposalDescription = proposal.summary;
+  const proposalTitle = proposal.title.slice(0, 200);
+  const proposalDescription = proposal.summary.slice(0, 400);
 
   const message = dedent(`
     New proposal in network ${network.name} #${proposalId}
@@ -98,37 +98,22 @@ async function handleNewProposal(network: any, chainId: string, proposal: any) {
       inline_keyboard: [
         [
           {
-            text: VoteButtons.Yes,
-            callback_data: JSON.stringify({
-              action: 'vote',
-              option: 'yes',
-              network: network.name,
-              proposalId
-            })
+            text: VoteButtons.YES,
+            callback_data: JSON.stringify({ action: 'vote', option: 'yes', chainId, proposalId })
           },
           {
-            text: VoteButtons.No,
-            callback_data: JSON.stringify({ action: 'vote', option: 'no', network: network.name, proposalId })
+            text: VoteButtons.NO,
+            callback_data: JSON.stringify({ action: 'vote', option: 'no', chainId, proposalId })
           },
         ],
         [
           {
-            text: VoteButtons.NoWithVeto,
-            callback_data: JSON.stringify({
-              action: 'vote',
-              option: 'veto',
-              network: network.name,
-              proposalId
-            })
+            text: VoteButtons.NO_WITH_VETO,
+            callback_data: JSON.stringify({ action: 'vote', option: 'veto', chainId, proposalId })
           },
           {
-            text: VoteButtons.Abstain,
-            callback_data: JSON.stringify({
-              action: 'vote',
-              option: 'abstain',
-              network: network.name,
-              proposalId
-            })
+            text: VoteButtons.ABSTAIN,
+            callback_data: JSON.stringify({ action: 'vote', option: 'abstain', chainId, proposalId })
           },
         ],
       ],
@@ -136,26 +121,21 @@ async function handleNewProposal(network: any, chainId: string, proposal: any) {
   };
 
   await bot.sendMessage(CHAT_ID, message, opts);
-
-  // Save proposal to the database
-  await saveProposal(chainId, proposalId);
 }
 
 // Button click handler
 bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
   const data = JSON.parse(callbackQuery.data!);
-  const { action, option, network: networkName, proposalId } = data;
+  const { action, option, chainId, proposalId } = data;
 
   if (action === 'vote') {
-    const network = networks.find((net) => net.chainId === networkName);
+    const network = networks.find((net) => net.chainId === chainId);
     if (!network) {
       await bot.sendMessage(callbackQuery.message?.chat.id!, 'Network not found.');
       return;
     }
 
-    const chainId = network.chainId;
     const coinType = network.coinType ?? 118;
-
     const result = await vote(network.rpcEndpoint, network.prefix, network.gasPrice, Number(proposalId), option, coinType);
     if (result && result.code === 0) {
       const opts = {
@@ -165,42 +145,22 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
           inline_keyboard: [
             [
               {
-                text: option === 'yes' ? `VOTED: ${VoteButtons.Yes}` : VoteButtons.Yes,
-                callback_data: JSON.stringify({
-                  action: 'vote',
-                  option: 'yes',
-                  network: networkName,
-                  proposalId
-                })
+                text: option === 'yes' ? `VOTED: ${VoteButtons.YES}` : VoteButtons.YES,
+                callback_data: JSON.stringify({ action: 'vote', option: 'yes', chainId, proposalId })
               },
               {
-                text: option === 'no' ? `VOTED: ${VoteButtons.No}` : VoteButtons.No,
-                callback_data: JSON.stringify({
-                  action: 'vote',
-                  option: 'no',
-                  network: networkName,
-                  proposalId
-                })
+                text: option === 'no' ? `VOTED: ${VoteButtons.NO}` : VoteButtons.NO,
+                callback_data: JSON.stringify({ action: 'vote', option: 'no', chainId, proposalId })
               },
             ],
             [
               {
-                text: option === 'veto' ? `VOTED: ${VoteButtons.NoWithVeto}` : VoteButtons.NoWithVeto,
-                callback_data: JSON.stringify({
-                  action: 'vote',
-                  option: 'veto',
-                  network: networkName,
-                  proposalId
-                })
+                text: option === 'veto' ? `VOTED: ${VoteButtons.NO_WITH_VETO}` : VoteButtons.NO_WITH_VETO,
+                callback_data: JSON.stringify({ action: 'vote', option: 'veto', chainId, proposalId })
               },
               {
-                text: option === 'abstain' ? `VOTED: ${VoteButtons.Abstain}` : VoteButtons.Abstain,
-                callback_data: JSON.stringify({
-                  action: 'vote',
-                  option: 'abstain',
-                  network: networkName,
-                  proposalId
-                })
+                text: option === 'abstain' ? `VOTED: ${VoteButtons.ABSTAIN}` : VoteButtons.ABSTAIN,
+                callback_data: JSON.stringify({ action: 'vote', option: 'abstain', chainId, proposalId })
               },
             ],
           ],
@@ -225,34 +185,30 @@ bot.onText(/\/networks/, async (msg: TelegramBot.Message) => {
 });
 
 bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
-  let activeProposalsMessage = 'List of active proposals in all networks:\n';
+  await bot.sendMessage(msg.chat.id, 'List of active proposals in all networks:');
 
   for (const network of networks) {
     const proposals = await fetchProposals(network.apiEndpoint);
-    const activeProposals = proposals.filter((proposal: any) => proposal.status === 'PROPOSAL_STATUS_VOTING_PERIOD');
-    if (activeProposals.length > 0) {
-      activeProposalsMessage += dedent(`
-        
-        Network: ${network.name}
-      `);
-      activeProposals.forEach((proposal: any) => {
-        activeProposalsMessage += `- #${proposal.id}: ${proposal.title}\n`;
-      });
+    const activeProposals = proposals; //.filter((proposal: any) => proposal.status === 'PROPOSAL_STATUS_VOTING_PERIOD');
+    for (const proposal of activeProposals) {
+      await sendProposalMessage(network, proposal);
     }
   }
-
-  await bot.sendMessage(msg.chat.id, activeProposalsMessage);
 });
 
 async function monitorProposals() {
   setInterval(async () => {
+
     for (const network of networks) {
       const chainId = network.chainId;
       const proposals = await fetchProposals(network.apiEndpoint);
+
       for (const proposal of proposals) {
-        const exists = await checkProposalExists(chainId, proposal.proposal_id);
+        const proposalId = proposal.id;
+        const exists = await checkProposalExists(chainId, proposalId);
         if (!exists) {
-          await handleNewProposal(network, chainId, proposal);
+          await sendProposalMessage(network, proposal);
+          await saveProposal(chainId, proposalId);
         }
       }
     }
