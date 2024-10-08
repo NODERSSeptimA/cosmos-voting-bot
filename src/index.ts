@@ -1,4 +1,4 @@
-import TelegramBot from 'node-telegram-bot-api';
+import TelegramBot, { ParseMode }  from 'node-telegram-bot-api';
 import { GasPrice, makeCosmoshubPath, SigningStargateClient } from '@cosmjs/stargate';
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing';
 import axios, { AxiosError } from 'axios';
@@ -108,6 +108,7 @@ async function sendProposalMessage(network: Network, proposal: any) {
         ],
       ],
     },
+    parse_mode: 'HTML' as ParseMode,
     disable_web_page_preview: true
   };
 
