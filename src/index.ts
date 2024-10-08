@@ -2,32 +2,23 @@ import TelegramBot from 'node-telegram-bot-api';
 import { GasPrice, makeCosmoshubPath, SigningStargateClient } from '@cosmjs/stargate';
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing';
 import axios, { AxiosError } from 'axios';
-import { Client } from 'pg';
 import dedent from 'dedent';
 import 'dotenv/config';
 import * as fs from 'fs';
 import { Network } from './types';
+import { checkProposalExists, connectDb, saveProposal, saveVote } from "./database";
 
-// Telegram Bot Token
+const MNEMONIC = process.env.MNEMONIC!;
+const FETCH_INTERVAL_MS = 60000;
+
+// Telegram Bot configuration
 const BOT_TOKEN = process.env.BOT_TOKEN!;
 const CHAT_ID = process.env.CHAT_ID!;
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-// PostgreSQL client
-const dbClient = new Client({
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT || '5432', 10),
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-});
-
 // Load network configuration from networks.json
 const networks: Network[] = JSON.parse(fs.readFileSync('networks.json', 'utf-8'));
 
-const MNEMONIC = process.env.MNEMONIC!;
-
-// Enum for vote button text
 enum VoteButtons {
   Yes = '👍 Yes',
   No = '👎 No',
@@ -39,7 +30,7 @@ enum VoteButtons {
 async function fetchProposals(apiEndpoint: string): Promise<any[]> {
   try {
     const response = await axios.get(`${apiEndpoint}/cosmos/gov/v1/proposals`);
-    return response.data.result;
+    return response.data.proposals;
   } catch (error: AxiosError | any) {
     console.error('Error fetching proposals:', error.message);
     return [];
@@ -147,10 +138,7 @@ async function handleNewProposal(network: any, chainId: string, proposal: any) {
   await bot.sendMessage(CHAT_ID, message, opts);
 
   // Save proposal to the database
-  await dbClient.query(
-    'INSERT INTO proposals(chain_id, proposal_id) VALUES($1, $2) ON CONFLICT DO NOTHING',
-    [chainId, proposalId]
-  );
+  await saveProposal(chainId, proposalId);
 }
 
 // Button click handler
@@ -220,12 +208,7 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
       };
 
       await bot.editMessageReplyMarkup(opts.reply_markup, opts);
-
-      // Save or update voting information in the database
-      await dbClient.query(
-        'INSERT INTO votes(chain_id, proposal_id, option) VALUES($1, $2, $3) ON CONFLICT (chain_id, proposal_id) DO UPDATE SET option = EXCLUDED.option',
-        [chainId, proposalId, option]
-      );
+      await saveVote(chainId, Number(proposalId), option);
     } else {
       await bot.sendMessage(callbackQuery.message?.chat.id!, `Error voting for proposal #${proposalId} in network ${network.name}. Please try again.`);
     }
@@ -261,32 +244,23 @@ bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
   await bot.sendMessage(msg.chat.id, activeProposalsMessage);
 });
 
-// Function to monitor new proposals
 async function monitorProposals() {
   setInterval(async () => {
     for (const network of networks) {
       const chainId = network.chainId;
-
-      const proposals = await fetchProposals(network.rpcEndpoint);
+      const proposals = await fetchProposals(network.apiEndpoint);
       for (const proposal of proposals) {
-        // Check if the proposal exists in the database
-        const res = await dbClient.query(
-          'SELECT * FROM proposals WHERE chain_id = $1 AND proposal_id = $2',
-          [chainId, proposal.proposal_id]
-        );
-
-        if (res.rows.length === 0) {
+        const exists = await checkProposalExists(chainId, proposal.proposal_id);
+        if (!exists) {
           await handleNewProposal(network, chainId, proposal);
         }
       }
     }
-  }, 60000); // Check every 60 seconds
+  }, FETCH_INTERVAL_MS);
 }
 
-dbClient.connect()
+connectDb()
   .then(() => {
-    console.log('Connected to the database');
-
     monitorProposals();
     console.log('Bot is running and monitoring new proposals...');
   });
