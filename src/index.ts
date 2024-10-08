@@ -105,7 +105,8 @@ async function sendProposalMessage(network: Network, proposal: any) {
           { text: VoteButtons.ABSTAIN, callback_data: `vote_abstain_${chainId}_${proposalId}`},
         ],
       ],
-    }
+    },
+    disable_web_page_preview: true
   };
 
   await bot.sendMessage(CHAT_ID, message, opts);
