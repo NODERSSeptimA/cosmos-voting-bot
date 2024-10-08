@@ -1,4 +1,4 @@
-import TelegramBot, { ParseMode }  from 'node-telegram-bot-api';
+import TelegramBot, { ParseMode } from 'node-telegram-bot-api';
 import { GasPrice, makeCosmoshubPath, SigningStargateClient } from '@cosmjs/stargate';
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing';
 import axios, { AxiosError } from 'axios';
@@ -6,8 +6,8 @@ import dedent from 'dedent';
 import 'dotenv/config';
 import * as fs from 'fs';
 import { Network } from './types';
-import { checkProposalExists, connectDb, saveProposal, saveVote } from "./database";
-import { getProposalType } from "./utils";
+import { checkProposalExists, connectDb, getVoteOptionForProp, saveProposal, saveVote } from "./database";
+import { getProposalStatus, getProposalType } from "./utils";
 
 const MNEMONIC = process.env.MNEMONIC!;
 const FETCH_INTERVAL_MS = 60000;
@@ -15,7 +15,7 @@ const FETCH_INTERVAL_MS = 60000;
 // Telegram Bot configuration
 const BOT_TOKEN = process.env.BOT_TOKEN!;
 const CHAT_ID = process.env.CHAT_ID!;
-const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+const bot = new TelegramBot(BOT_TOKEN, {polling: true});
 
 // Load network configuration from networks.json
 const networks: Network[] = JSON.parse(fs.readFileSync('networks.json', 'utf-8'));
@@ -27,7 +27,33 @@ enum VoteButtons {
   ABSTAIN = '🤷‍♂️ Abstain'
 }
 
-// Function to fetch the list of proposals
+function getInlineKeyboardMarkup(chainId: string, proposalId: number, option: string | undefined): TelegramBot.InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: option === 'yes' ? `VOTED: ${VoteButtons.YES}` : VoteButtons.YES,
+          callback_data: `vote__yes__${chainId}__${proposalId}`
+        },
+        {
+          text: option === 'no' ? `VOTED: ${VoteButtons.NO}` : VoteButtons.NO,
+          callback_data: `vote__no__${chainId}__${proposalId}`
+        },
+      ],
+      [
+        {
+          text: option === 'veto' ? `VOTED: ${VoteButtons.NO_WITH_VETO}` : VoteButtons.NO_WITH_VETO,
+          callback_data: `vote__veto__${chainId}__${proposalId}`
+        },
+        {
+          text: option === 'abstain' ? `VOTED: ${VoteButtons.ABSTAIN}` : VoteButtons.ABSTAIN,
+          callback_data: `vote__abstain__${chainId}__${proposalId}`
+        },
+      ],
+    ],
+  };
+}
+
 async function fetchProposals(apiEndpoint: string): Promise<any[]> {
   try {
     const response = await axios.get(`${apiEndpoint}/cosmos/gov/v1/proposals`);
@@ -39,74 +65,69 @@ async function fetchProposals(apiEndpoint: string): Promise<any[]> {
 }
 
 async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string, proposalId: number, option: string, coinType: number) {
+  const hdPath = makeCosmoshubPath(coinType);
+  const wallet = await DirectSecp256k1HdWallet.fromMnemonic(MNEMONIC, {prefix, hdPaths: [hdPath]});
+  const [account] = await wallet.getAccounts();
+  const gasPrice = GasPrice.fromString(gasPriceString);
+  const client = await SigningStargateClient.connectWithSigner(rpcEndpoint, wallet, {gasPrice});
+
+  let voteOption;
+  switch (option) {
+    case 'yes':
+      voteOption = 1;
+      break;
+    case 'no':
+      voteOption = 3;
+      break;
+    case 'veto':
+      voteOption = 4;
+      break;
+    case 'abstain':
+      voteOption = 2;
+      break;
+  }
+
+  const voteMsg = {
+    typeUrl: '/cosmos.gov.v1beta1.MsgVote',
+    value: {
+      proposalId: proposalId,
+      voter: account.address,
+      option: voteOption,
+    },
+  };
+
   try {
-    const hdPath = makeCosmoshubPath(coinType);
-    const wallet = await DirectSecp256k1HdWallet.fromMnemonic(MNEMONIC, { prefix, hdPaths: [hdPath] });
-    const [account] = await wallet.getAccounts();
-    const gasPrice = GasPrice.fromString(gasPriceString);
-    const client = await SigningStargateClient.connectWithSigner(rpcEndpoint, wallet, { gasPrice });
-
-    let voteOption;
-    switch (option) {
-      case 'yes':
-        voteOption = 1;
-        break;
-      case 'no':
-        voteOption = 3;
-        break;
-      case 'veto':
-        voteOption = 4;
-        break;
-      case 'abstain':
-        voteOption = 2;
-        break;
-    }
-
-    const voteMsg = {
-      typeUrl: '/cosmos.gov.v1beta1.MsgVote',
-      value: {
-        proposalId: proposalId,
-        voter: account.address,
-        option: voteOption,
-      },
-    };
-
     const result = await client.signAndBroadcast(account.address, [voteMsg], 'auto');
     console.log('Transaction result:', result);
     return result;
-  } catch (error: AxiosError | any) {
-    console.error(`Error voting on prop (${rpcEndpoint}) ${proposalId}:`, error.message);
-    return { code: 1, error };
+  } catch (error: any) {
+    console.error('Error signing and broadcasting vote:', error.message);
+    return {
+      code: 1,
+      rawLog: error.message,
+    };
   }
 }
 
 async function sendProposalMessage(network: Network, proposal: any) {
   const chainId = network.chainId;
-  const proposalId = proposal.id;
+  const proposalId: number = proposal.id;
   const proposalTitle = proposal.title.slice(0, 200);
   const proposalDescription = proposal.summary.slice(0, 400);
   const proposalType = getProposalType(proposal);
+  const option = await getVoteOptionForProp(chainId, proposalId);
 
   const message = dedent(`
-    🌐<b>Network</b> ${network.name}
+    🌐<b>Network:</b> ${network.name}
     📜<b>Proposal ID:</b> ${proposalId}
     🗳<b>Type:</b> ${proposalType}
-    📃<b>Title</b> ${proposalTitle}
-    📚<b>Description</b>${proposalDescription}
+    📃<b>Title:</b> ${proposalTitle}
+    📚<b>Description:</b> ${proposalDescription}
   `);
 
   const opts = {
     reply_markup: {
-      inline_keyboard: [
-        [
-          { text: VoteButtons.YES, callback_data: `vote_yes_${chainId}_${proposalId}` },
-          { text: VoteButtons.NO, callback_data: `vote_no_${chainId}_${proposalId}` },
-        ],
-        [
-          { text: VoteButtons.NO_WITH_VETO, callback_data: `vote_veto_${chainId}_${proposalId}` },
-          { text: VoteButtons.ABSTAIN, callback_data: `vote_abstain_${chainId}_${proposalId}`},
-        ],
-      ],
+      ...getInlineKeyboardMarkup(chainId, proposalId, option),
     },
     parse_mode: 'HTML' as ParseMode,
     disable_web_page_preview: true
@@ -117,12 +138,12 @@ async function sendProposalMessage(network: Network, proposal: any) {
 
 // Button click handler
 bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
-  const [action, option, chainId, proposalId] = callbackQuery.data!.split('_');
+  const [action, option, chainId, proposalId] = callbackQuery.data!.split('__');
 
   if (action === 'vote') {
-    const network = networks.find((net) => net.chainId === chainId);
+    const network = networks.find((network) => network.chainId === chainId);
     if (!network) {
-      await bot.sendMessage(callbackQuery.message?.chat.id!, 'Network not found.');
+      await bot.sendMessage(callbackQuery.message?.chat.id!, 'Network not found for chainId: ' + chainId);
       return;
     }
 
@@ -133,35 +154,17 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
         chat_id: callbackQuery.message?.chat.id!,
         message_id: callbackQuery.message?.message_id,
         reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: option === 'yes' ? `VOTED: ${VoteButtons.YES}` : VoteButtons.YES,
-                callback_data: `vote_yes_${chainId}_${proposalId}`
-              },
-              {
-                text: option === 'no' ? `VOTED: ${VoteButtons.NO}` : VoteButtons.NO,
-                callback_data: `vote_no_${chainId}_${proposalId}`
-              },
-            ],
-            [
-              {
-                text: option === 'veto' ? `VOTED: ${VoteButtons.NO_WITH_VETO}` : VoteButtons.NO_WITH_VETO,
-                callback_data: `vote_veto_${chainId}_${proposalId}`
-              },
-              {
-                text: option === 'abstain' ? `VOTED: ${VoteButtons.ABSTAIN}` : VoteButtons.ABSTAIN,
-                callback_data: `vote_abstain_${chainId}_${proposalId}`
-              },
-            ],
-          ],
-        }
+          ...getInlineKeyboardMarkup(chainId, Number(proposalId), option),
+        },
+        parse_mode: 'HTML' as ParseMode,
+        disable_web_page_preview: true
       };
 
       await bot.editMessageReplyMarkup(opts.reply_markup, opts);
       await saveVote(chainId, Number(proposalId), option);
     } else {
-      await bot.sendMessage(callbackQuery.message?.chat.id!, `Error voting for proposal #${proposalId} in network ${network.name}. Please try again.`);
+      const errorMessage = `🟥 Error voting for proposal #${proposalId} in network ${network.name}: ${result.rawLog}`;
+      await bot.sendMessage(callbackQuery.message?.chat.id!, errorMessage);
     }
   }
 });
@@ -180,7 +183,7 @@ bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
 
   for (const network of networks) {
     const proposals = await fetchProposals(network.apiEndpoint);
-    const activeProposals = proposals.filter((proposal: any) => proposal.status === 'PROPOSAL_STATUS_VOTING_PERIOD');
+    const activeProposals = proposals.filter((proposal: any) => getProposalStatus(proposal) === 'PROPOSAL_STATUS_VOTING_PERIOD');
 
     if (activeProposals.length > 0) {
       thereAreActiveProposals = true;

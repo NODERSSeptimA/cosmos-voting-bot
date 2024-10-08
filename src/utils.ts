@@ -15,4 +15,16 @@ function getProposalType(proposal: any): string {
   return 'Unknown';
 }
 
-export { getProposalType };
+function getProposalStatus(proposal: any): string {
+  if (proposal.proposal_status) {
+    return proposal.proposal_status;
+  }
+
+  if (proposal.status) {
+    return proposal.status;
+  }
+
+  return 'Unknown';
+}
+
+export { getProposalType, getProposalStatus };

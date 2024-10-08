@@ -70,4 +70,15 @@ async function checkProposalExists(chainId: string, proposalId: number): Promise
   }
 }
 
-export { dbClient, connectDb, saveProposal, saveVote, checkProposalExists };
+async function getVoteOptionForProp(chainId: string, proposalId: number): Promise<string | undefined> {
+  const query = 'SELECT option FROM votes WHERE chain_id = $1 AND proposal_id = $2';
+  try {
+    const res = await dbClient.query(query, [chainId, proposalId]);
+    return res.rows[0]?.option || undefined;
+  } catch (error: any) {
+    console.error('Error getting vote:', error.message);
+    return undefined;
+  }
+}
+
+export { dbClient, connectDb, saveProposal, saveVote, getVoteOptionForProp, checkProposalExists };
