@@ -7,7 +7,14 @@ import 'dotenv/config';
 import * as fs from 'fs';
 import { Network } from './types';
 import { checkProposalExists, connectDb, getVoteOptionForProp, saveProposal, saveVote } from "./database";
-import { getProposalDescription, getProposalId, getProposalStatus, getProposalTitle, getProposalType } from "./utils";
+import {
+  getProposalId,
+  getProposalStatus,
+  getProposalTitle,
+  getProposalType,
+  getUpgradeInfo,
+  isUpgradeProposal
+} from "./utils";
 
 const MNEMONIC = process.env.MNEMONIC!;
 const FETCH_INTERVAL_MS = 60000;
@@ -126,17 +133,25 @@ async function sendProposalMessage(network: Network, proposal: any) {
   const chainId = network.chainId;
   const proposalId = getProposalId(proposal);
   const proposalTitle = getProposalTitle(proposal);
-  const proposalDescription = getProposalDescription(proposal).slice(0, 400);
   const proposalType = getProposalType(proposal);
   const option = await getVoteOptionForProp(chainId, proposalId);
 
-  const message = dedent(`
+  let message = dedent(`
     🌐<b>Network:</b> ${network.name}
     📜<b>Proposal ID:</b> ${proposalId}
     🗳<b>Type:</b> ${proposalType}
     📃<b>Title:</b> ${proposalTitle}
-    📚<b>Description:</b> ${proposalDescription}
   `);
+
+  if (isUpgradeProposal(proposal)) {
+    const upgradeInfo = getUpgradeInfo(proposal);
+    const upgradeInfoMessage = dedent(`
+      🚀<b>Upgrade Info:</b>
+      <b>Name:</b> ${upgradeInfo.name}
+      <b>Height:</b> ${upgradeInfo.height}
+    `);
+    message = message + '\n\n' + upgradeInfoMessage;
+  }
 
   const opts = {
     reply_markup: {
@@ -205,7 +220,7 @@ bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
 
     if (activeProposals.length > 0) {
       thereAreActiveProposals = true;
-      await bot.sendMessage(msg.chat.id, `List of active proposals in ${network.name}:`);
+      await bot.sendMessage(msg.chat.id, `List of active proposals in <b>${network.name}:</b>`, {parse_mode: 'HTML' as ParseMode});
       for (const proposal of activeProposals) {
         await sendProposalMessage(network, proposal);
       }

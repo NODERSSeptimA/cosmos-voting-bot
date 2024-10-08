@@ -1,4 +1,4 @@
-export interface Network {
+interface Network {
   name: string;
   apiEndpoint: string;
   rpcEndpoint: string;
@@ -8,3 +8,10 @@ export interface Network {
   chainId: string;
   coinType?: number;
 }
+
+interface UpgradeInfo {
+  name: string;
+  height: string;
+}
+
+export { Network, UpgradeInfo };

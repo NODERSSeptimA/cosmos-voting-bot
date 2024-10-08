@@ -1,3 +1,5 @@
+import { UpgradeInfo } from "./types";
+
 function splitCamelCaseWithSpaces(messageType: string): string {
   const lastPart = messageType.split('.').pop();
   return lastPart!.replace(/([A-Z])/g, ' $1').trim();
@@ -67,4 +69,24 @@ function getProposalDescription(proposal: any): string {
   return 'Unknown';
 }
 
-export { getProposalId, getProposalType, getProposalStatus, getProposalTitle, getProposalDescription };
+function isUpgradeProposal(proposal: any): boolean {
+  return getProposalType(proposal).toLowerCase().includes('upgrade');
+}
+
+function getUpgradeInfo(proposal: any): UpgradeInfo {
+  if (proposal.messages && proposal.messages[0].plan) {
+    return proposal.messages[0].plan;
+  }
+
+  if (proposal.messages && proposal.messages[0].content?.plan) {
+    return proposal.messages[0].content.plan;
+  }
+
+  if (proposal.content?.plan) {
+    return proposal.content.plan;
+  }
+
+  return { name: 'Unknown', height: 'Unknown' };
+}
+
+export { getProposalId, getProposalType, getProposalStatus, getProposalTitle, getProposalDescription, isUpgradeProposal, getUpgradeInfo };
