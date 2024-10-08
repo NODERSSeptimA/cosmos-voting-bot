@@ -7,6 +7,7 @@ import 'dotenv/config';
 import * as fs from 'fs';
 import { Network } from './types';
 import { checkProposalExists, connectDb, saveProposal, saveVote } from "./database";
+import { getProposalType } from "./utils";
 
 const MNEMONIC = process.env.MNEMONIC!;
 const FETCH_INTERVAL_MS = 60000;

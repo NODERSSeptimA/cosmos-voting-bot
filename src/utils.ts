@@ -14,3 +14,5 @@ function getProposalType(proposal: any): string {
 
   return 'Unknown';
 }
+
+export { getProposalType };
