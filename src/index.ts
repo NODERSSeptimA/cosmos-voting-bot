@@ -82,9 +82,9 @@ async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string,
 
 // Function to handle a new proposal
 async function handleNewProposal(network: any, chainId: string, proposal: any) {
-  const proposalId = proposal.proposal_id;
-  const proposalTitle = proposal.content.title;
-  const proposalDescription = proposal.content.description;
+  const proposalId = proposal.id;
+  const proposalTitle = proposal.title;
+  const proposalDescription = proposal.summary;
 
   const message = dedent(`
     New proposal in network ${network.name} #${proposalId}
@@ -236,7 +236,7 @@ bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
         Network: ${network.name}
       `);
       activeProposals.forEach((proposal: any) => {
-        activeProposalsMessage += `- #${proposal.proposal_id}: ${proposal.content.title}\n`;
+        activeProposalsMessage += `- #${proposal.id}: ${proposal.title}\n`;
       });
     }
   }
