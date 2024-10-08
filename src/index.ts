@@ -176,14 +176,23 @@ bot.onText(/\/networks/, async (msg: TelegramBot.Message) => {
 });
 
 bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
-  await bot.sendMessage(msg.chat.id, 'List of active proposals in all networks:');
+  let thereAreActiveProposals = false;
 
   for (const network of networks) {
     const proposals = await fetchProposals(network.apiEndpoint);
     const activeProposals = proposals.filter((proposal: any) => proposal.status === 'PROPOSAL_STATUS_VOTING_PERIOD');
-    for (const proposal of activeProposals) {
-      await sendProposalMessage(network, proposal);
+
+    if (activeProposals.length > 0) {
+      thereAreActiveProposals = true;
+      await bot.sendMessage(msg.chat.id, `List of active proposals in ${network.name}:`);
+      for (const proposal of activeProposals) {
+        await sendProposalMessage(network, proposal);
+      }
     }
+  }
+
+  if (!thereAreActiveProposals) {
+    await bot.sendMessage(msg.chat.id, 'There are no active proposals in any network.');
   }
 });
 
