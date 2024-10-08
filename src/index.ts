@@ -7,7 +7,7 @@ import 'dotenv/config';
 import * as fs from 'fs';
 import { Network } from './types';
 import { checkProposalExists, connectDb, getVoteOptionForProp, saveProposal, saveVote } from "./database";
-import { getProposalStatus, getProposalType } from "./utils";
+import { getProposalDescription, getProposalId, getProposalStatus, getProposalTitle, getProposalType } from "./utils";
 
 const MNEMONIC = process.env.MNEMONIC!;
 const FETCH_INTERVAL_MS = 60000;
@@ -55,13 +55,24 @@ function getInlineKeyboardMarkup(chainId: string, proposalId: number, option: st
 }
 
 async function fetchProposals(apiEndpoint: string): Promise<any[]> {
+  let response;
+  let errorMessage;
   try {
-    const response = await axios.get(`${apiEndpoint}/cosmos/gov/v1/proposals`);
+    response = await axios.get(`${apiEndpoint}/cosmos/gov/v1/proposals`);
     return response.data.proposals;
   } catch (error: AxiosError | any) {
-    console.error('Error fetching proposals:', error.message);
-    return [];
+    errorMessage = error.message;
   }
+
+  try {
+    response = await axios.get(`${apiEndpoint}/cosmos/gov/v1beta1/proposals`);
+    return response.data.proposals;
+  } catch (error: AxiosError | any) {
+    errorMessage = error.message;
+  }
+
+  console.error('Error fetching proposals:', errorMessage);
+  return [];
 }
 
 async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string, proposalId: number, option: string, coinType: number) {
@@ -111,9 +122,9 @@ async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string,
 
 async function sendProposalMessage(network: Network, proposal: any) {
   const chainId = network.chainId;
-  const proposalId: number = proposal.id;
-  const proposalTitle = proposal.title.slice(0, 200);
-  const proposalDescription = proposal.summary.slice(0, 400);
+  const proposalId = getProposalId(proposal);
+  const proposalTitle = getProposalTitle(proposal);
+  const proposalDescription = getProposalDescription(proposal).slice(0, 400);
   const proposalType = getProposalType(proposal);
   const option = await getVoteOptionForProp(chainId, proposalId);
 
@@ -170,6 +181,11 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
 });
 
 // Handler for utility commands
+bot.setMyCommands([
+  { command: '/networks', description: 'Show list of supported networks' },
+  { command: '/active_proposals', description: 'show active proposals' },
+]);
+
 bot.onText(/\/networks/, async (msg: TelegramBot.Message) => {
   const networkList = networks.map((network) => `- ${network.name}`).join('\n');
   await bot.sendMessage(msg.chat.id, dedent(`
@@ -207,7 +223,7 @@ async function monitorProposals() {
       const proposals = await fetchProposals(network.apiEndpoint);
 
       for (const proposal of proposals) {
-        const proposalId = proposal.id;
+        const proposalId = getProposalId(proposal);
         const exists = await checkProposalExists(chainId, proposalId);
         if (!exists) {
           await sendProposalMessage(network, proposal);

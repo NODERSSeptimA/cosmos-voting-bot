@@ -3,6 +3,18 @@ function splitCamelCaseWithSpaces(messageType: string): string {
   return lastPart!.replace(/([A-Z])/g, ' $1').trim();
 }
 
+function getProposalId(proposal: any): number {
+  if (proposal.proposal_id) {
+    return proposal.proposal_id;
+  }
+
+  if (proposal.id) {
+    return proposal.id;
+  }
+
+  return -1;
+}
+
 function getProposalType(proposal: any): string {
   if (proposal.proposal_type) {
     return  splitCamelCaseWithSpaces(proposal.proposal_type);
@@ -10,6 +22,10 @@ function getProposalType(proposal: any): string {
 
   if (proposal.messages && proposal.messages[0]["@type"]) {
     return splitCamelCaseWithSpaces(proposal.messages[0]["@type"]);
+  }
+
+  if (proposal.content && proposal.content["@type"]) {
+    return splitCamelCaseWithSpaces(proposal.content["@type"]);
   }
 
   return 'Unknown';
@@ -27,4 +43,28 @@ function getProposalStatus(proposal: any): string {
   return 'Unknown';
 }
 
-export { getProposalType, getProposalStatus };
+function getProposalTitle(proposal: any): string {
+  if (proposal.title) {
+    return proposal.title;
+  }
+
+  if (proposal.content && proposal.content.title) {
+    return proposal.content.title;
+  }
+
+  return 'Unknown';
+}
+
+function getProposalDescription(proposal: any): string {
+  if (proposal.summary) {
+    return proposal.summary;
+  }
+
+  if (proposal.content && proposal.content.description) {
+    return proposal.content.description;
+  }
+
+  return 'Unknown';
+}
+
+export { getProposalId, getProposalType, getProposalStatus, getProposalTitle, getProposalDescription };
