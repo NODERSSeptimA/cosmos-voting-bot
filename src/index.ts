@@ -97,24 +97,12 @@ async function sendProposalMessage(network: Network, proposal: any) {
     reply_markup: {
       inline_keyboard: [
         [
-          {
-            text: VoteButtons.YES,
-            callback_data: JSON.stringify({ action: 'vote', option: 'yes', chainId, proposalId })
-          },
-          {
-            text: VoteButtons.NO,
-            callback_data: JSON.stringify({ action: 'vote', option: 'no', chainId, proposalId })
-          },
+          { text: VoteButtons.YES, callback_data: `vote_yes_${chainId}_${proposalId}` },
+          { text: VoteButtons.NO, callback_data: `vote_no_${chainId}_${proposalId}` },
         ],
         [
-          {
-            text: VoteButtons.NO_WITH_VETO,
-            callback_data: JSON.stringify({ action: 'vote', option: 'veto', chainId, proposalId })
-          },
-          {
-            text: VoteButtons.ABSTAIN,
-            callback_data: JSON.stringify({ action: 'vote', option: 'abstain', chainId, proposalId })
-          },
+          { text: VoteButtons.NO_WITH_VETO, callback_data: `vote_veto_${chainId}_${proposalId}` },
+          { text: VoteButtons.ABSTAIN, callback_data: `vote_abstain_${chainId}_${proposalId}`},
         ],
       ],
     }
@@ -125,8 +113,7 @@ async function sendProposalMessage(network: Network, proposal: any) {
 
 // Button click handler
 bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
-  const data = JSON.parse(callbackQuery.data!);
-  const { action, option, chainId, proposalId } = data;
+  const [action, option, chainId, proposalId] = callbackQuery.data!.split('_');
 
   if (action === 'vote') {
     const network = networks.find((net) => net.chainId === chainId);
@@ -146,21 +133,21 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
             [
               {
                 text: option === 'yes' ? `VOTED: ${VoteButtons.YES}` : VoteButtons.YES,
-                callback_data: JSON.stringify({ action: 'vote', option: 'yes', chainId, proposalId })
+                callback_data: `vote_yes_${chainId}_${proposalId}`
               },
               {
                 text: option === 'no' ? `VOTED: ${VoteButtons.NO}` : VoteButtons.NO,
-                callback_data: JSON.stringify({ action: 'vote', option: 'no', chainId, proposalId })
+                callback_data: `vote_no_${chainId}_${proposalId}`
               },
             ],
             [
               {
                 text: option === 'veto' ? `VOTED: ${VoteButtons.NO_WITH_VETO}` : VoteButtons.NO_WITH_VETO,
-                callback_data: JSON.stringify({ action: 'vote', option: 'veto', chainId, proposalId })
+                callback_data: `vote_veto_${chainId}_${proposalId}`
               },
               {
                 text: option === 'abstain' ? `VOTED: ${VoteButtons.ABSTAIN}` : VoteButtons.ABSTAIN,
-                callback_data: JSON.stringify({ action: 'vote', option: 'abstain', chainId, proposalId })
+                callback_data: `vote_abstain_${chainId}_${proposalId}`
               },
             ],
           ],
