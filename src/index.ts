@@ -77,10 +77,12 @@ async function fetchProposals(apiEndpoint: string): Promise<any[]> {
 
 async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string, proposalId: number, option: string, coinType: number) {
   const hdPath = makeCosmoshubPath(coinType);
-  const wallet = await DirectSecp256k1HdWallet.fromMnemonic(MNEMONIC, {prefix, hdPaths: [hdPath]});
+  const wallet = await DirectSecp256k1HdWallet.fromMnemonic(MNEMONIC, {prefix});
   const [account] = await wallet.getAccounts();
   const gasPrice = GasPrice.fromString(gasPriceString);
   const client = await SigningStargateClient.connectWithSigner(rpcEndpoint, wallet, {gasPrice});
+
+  console.log(`Voting for proposal #${proposalId} with option "${option}" from account ${account.address} using rpc: ${rpcEndpoint}`);
 
   let voteOption;
   switch (option) {
@@ -182,8 +184,8 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
 
 // Handler for utility commands
 bot.setMyCommands([
-  { command: '/networks', description: 'Show list of supported networks' },
-  { command: '/active_proposals', description: 'show active proposals' },
+  {command: '/networks', description: 'Show list of supported networks'},
+  {command: '/active_proposals', description: 'show active proposals'},
 ]);
 
 bot.onText(/\/networks/, async (msg: TelegramBot.Message) => {
