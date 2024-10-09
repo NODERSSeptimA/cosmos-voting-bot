@@ -1,18 +1,40 @@
 [
-  {
-    "name": "Cosmos Hub",
-    "rpcEndpoint": "https://rpc.cosmos.network",
-    "prefix": "cosmos",
-    "denom": "uatom",
-    "gasPrice": "0.025uatom",
-    "chainId": "cosmoshub-4"
-  },
-  {
-    "name": "Osmosis",
-    "rpcEndpoint": "https://rpc.osmosis.zone",
-    "prefix": "osmo",
-    "denom": "uosmo",
-    "gasPrice": "0.025uosmo",
-    "chainId": "osmosis-1"
-  }
+    {
+        "name": "Cosmos Hub",
+        "scope": "mainnet",
+        "rpcEndpoint": "https://rpc.cosmos.network",
+        "prefix": "cosmos",
+        "denom": "uatom",
+        "gasPrice": "0.025uatom",
+        "chainId": "cosmoshub-4"
+    },
+    {
+        "name": "Osmosis",
+        "scope": "mainnet",
+        "rpcEndpoint": "https://rpc.osmosis.zone",
+        "prefix": "osmo",
+        "denom": "uosmo",
+        "gasPrice": "0.025uosmo",
+        "chainId": "osmosis-1"
+    },
+    {
+        "name": "Artela",
+        "scope": "testnet",
+        "apiEndpoint": "https://artela-testnet-api.polkachu.com",
+        "rpcEndpoint": "https://artela-testnet-rpc.polkachu.com",
+        "prefix": "art",
+        "denom": "uarpt",
+        "gasPrice": "0.025uart",
+        "chainId": "artela_11822-1"
+    },
+    {
+        "name": "Jackal",
+        "scope": "mainnet",
+        "apiEndpoint": "https://jackal-api.polkachu.com",
+        "rpcEndpoint": "https://jackal-rpc.polkachu.com",
+        "prefix": "jkl",
+        "denom": "ujkl",
+        "gasPrice": "0.025ujkl",
+        "chainId": "jackal-1"
+    }
 ]

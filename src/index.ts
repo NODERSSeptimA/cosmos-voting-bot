@@ -175,7 +175,7 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
       return;
     }
 
-    const coinType = network.coinType ?? 118;
+    const coinType = network.coinType ?? 118; // TODO: add support of coin type
     const result = await vote(network.rpcEndpoint, network.prefix, network.gasPrice, Number(proposalId), option, coinType);
     if (result && result.code === 0) {
       const opts = {
@@ -210,11 +210,21 @@ bot.setMyCommands([
 ]);
 
 bot.onText(/\/networks/, async (msg: TelegramBot.Message) => {
-  const networkList = networks.map((network) => `- ${network.name}`).join('\n');
-  await bot.sendMessage(msg.chat.id, dedent(`
-    Supported networks:
-    ${networkList}
-  `));
+  const testnetNetworks = networks
+    .filter((network) => network.scope === 'testnet')
+    .map((network) => `- ${network.name}`).join('\n');
+  const mainnetNetworks = networks
+    .filter((network) => network.scope === 'mainnet')
+    .map((network) => `- ${network.name}`).join('\n');
+
+  let message = `Supported networks:\n\n`;
+  if (testnetNetworks.length > 0) {
+    message += `Testnet:\n${testnetNetworks}\n\n`;
+  }
+  if (mainnetNetworks.length > 0) {
+    message += `Mainnet:\n${mainnetNetworks}`;
+  }
+  await bot.sendMessage(msg.chat.id, message);
 });
 
 bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {

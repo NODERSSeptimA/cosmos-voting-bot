@@ -1,5 +1,6 @@
 interface Network {
   name: string;
+  scope: string;
   apiEndpoint: string;
   rpcEndpoint: string;
   prefix: string;
