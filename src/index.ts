@@ -39,21 +39,21 @@ function getInlineKeyboardMarkup(chainId: string, proposalId: number, option: st
     inline_keyboard: [
       [
         {
-          text: option === 'yes' ? `VOTED: ${VoteButtons.YES}` : VoteButtons.YES,
+          text: option === 'yes' ? `✅ VOTED: ${VoteButtons.YES}` : VoteButtons.YES,
           callback_data: `vote__yes__${chainId}__${proposalId}`
         },
         {
-          text: option === 'no' ? `VOTED: ${VoteButtons.NO}` : VoteButtons.NO,
+          text: option === 'no' ? `✅ VOTED: ${VoteButtons.NO}` : VoteButtons.NO,
           callback_data: `vote__no__${chainId}__${proposalId}`
         },
       ],
       [
         {
-          text: option === 'veto' ? `VOTED: ${VoteButtons.NO_WITH_VETO}` : VoteButtons.NO_WITH_VETO,
+          text: option === 'veto' ? `✅ VOTED: ${VoteButtons.NO_WITH_VETO}` : VoteButtons.NO_WITH_VETO,
           callback_data: `vote__veto__${chainId}__${proposalId}`
         },
         {
-          text: option === 'abstain' ? `VOTED: ${VoteButtons.ABSTAIN}` : VoteButtons.ABSTAIN,
+          text: option === 'abstain' ? `✅ VOTED: ${VoteButtons.ABSTAIN}` : VoteButtons.ABSTAIN,
           callback_data: `vote__abstain__${chainId}__${proposalId}`
         },
       ],
