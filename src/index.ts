@@ -17,7 +17,7 @@ import {
 } from "./utils";
 
 const MNEMONIC = process.env.MNEMONIC!;
-const FETCH_INTERVAL_MS = 60000;
+const FETCH_INTERVAL_MS = parseInt(process.env.FETCH_INTERVAL_MS || "60000");
 
 // Telegram Bot configuration
 const BOT_TOKEN = process.env.BOT_TOKEN!;
@@ -78,7 +78,7 @@ async function fetchProposals(apiEndpoint: string): Promise<any[]> {
     errorMessage = error.message;
   }
 
-  console.error('Error fetching proposals:', errorMessage);
+  console.error(`Error fetching proposals from ${apiEndpoint}:`, errorMessage);
   return [];
 }
 

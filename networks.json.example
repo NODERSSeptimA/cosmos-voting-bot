@@ -2,6 +2,7 @@
     {
         "name": "Cosmos Hub",
         "scope": "mainnet",
+        "apiEndpoint": "https://cosmoshub.api.kjnodes.com",
         "rpcEndpoint": "https://rpc.cosmos.network",
         "prefix": "cosmos",
         "denom": "uatom",
@@ -11,6 +12,7 @@
     {
         "name": "Osmosis",
         "scope": "mainnet",
+        "apiEndpoint": "https://lcd.osmosis.zone",
         "rpcEndpoint": "https://rpc.osmosis.zone",
         "prefix": "osmo",
         "denom": "uosmo",
