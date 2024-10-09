@@ -191,8 +191,14 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
       await bot.editMessageReplyMarkup(opts.reply_markup, opts);
       await saveVote(chainId, Number(proposalId), option);
     } else {
-      const errorMessage = `🟥 Error voting for proposal #${proposalId} in network ${network.name}: ${result.rawLog}`;
-      await bot.sendMessage(callbackQuery.message?.chat.id!, errorMessage);
+      const errorMessage = dedent(
+        `🟥 Error voting for proposal <b>#${proposalId}</b> in network <b>${network.name}:</b>
+        ${result.rawLog}`
+      );
+      await bot.sendMessage(callbackQuery.message?.chat.id!, errorMessage, {
+        reply_to_message_id: callbackQuery.message?.message_id,
+        parse_mode: 'HTML' as ParseMode
+      });
     }
   }
 });
