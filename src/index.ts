@@ -13,8 +13,9 @@ import {
   getProposalTitle,
   getProposalType,
   getUpgradeInfo,
+  getVotingEndTime,
   isUpgradeProposal
-} from "./utils";
+} from "./proposalUtils";
 
 const MNEMONIC = process.env.MNEMONIC!;
 const FETCH_INTERVAL_MS = parseInt(process.env.FETCH_INTERVAL_MS || "60000");
@@ -24,8 +25,7 @@ const BOT_TOKEN = process.env.BOT_TOKEN!;
 const CHAT_ID = process.env.CHAT_ID!;
 const bot = new TelegramBot(BOT_TOKEN, {polling: true});
 
-// Load network configuration from networks.json
-const networks: Network[] = JSON.parse(fs.readFileSync('networks.json', 'utf-8'));
+let networks: Network[] = [];
 
 enum VoteButtons {
   YES = '👍 Yes',
@@ -65,14 +65,14 @@ async function fetchProposals(apiEndpoint: string): Promise<any[]> {
   let response;
   let errorMessage;
   try {
-    response = await axios.get(`${apiEndpoint}/cosmos/gov/v1/proposals`);
+    response = await axios.get(`${apiEndpoint}/cosmos/gov/v1/proposals?proposal_status=2`);
     return response.data.proposals;
   } catch (error: AxiosError | any) {
     errorMessage = error.message;
   }
 
   try {
-    response = await axios.get(`${apiEndpoint}/cosmos/gov/v1beta1/proposals`);
+    response = await axios.get(`${apiEndpoint}/cosmos/gov/v1beta1/proposals?proposal_status=2`);
     return response.data.proposals;
   } catch (error: AxiosError | any) {
     errorMessage = error.message;
@@ -135,12 +135,15 @@ async function sendProposalMessage(network: Network, proposal: any) {
   const proposalTitle = getProposalTitle(proposal);
   const proposalType = getProposalType(proposal);
   const option = await getVoteOptionForProp(chainId, proposalId);
+  const votingEndsTime = getVotingEndTime(proposal);
 
   let message = dedent(`
-    🌐<b>Network:</b> ${network.name}
-    📜<b>Proposal ID:</b> ${proposalId}
-    🗳<b>Type:</b> ${proposalType}
-    📃<b>Title:</b> ${proposalTitle}
+    🌐 <b>Network:</b> ${network.name}
+    ⚖️ <b>Scope:</b> ${network.scope}
+    📜 <b>Proposal ID:</b> ${proposalId}
+    🗳 <b>Type:</b> ${proposalType}
+    📃 <b>Title:</b> ${proposalTitle}
+    🕓 <b>Voting ends:</b> ${votingEndsTime}
   `);
 
   if (isUpgradeProposal(proposal)) {
@@ -249,26 +252,29 @@ bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
 });
 
 async function monitorProposals() {
-  setInterval(async () => {
+  networks = JSON.parse(fs.readFileSync('networks.json', 'utf-8'));
+  console.log('Networks:', networks.map((network) => `${network.name}(${network.scope})`).join(', '));
 
-    for (const network of networks) {
-      const chainId = network.chainId;
-      const proposals = await fetchProposals(network.apiEndpoint);
+  for (const network of networks) {
+    const chainId = network.chainId;
+    const proposals = await fetchProposals(network.apiEndpoint);
 
-      for (const proposal of proposals) {
-        const proposalId = getProposalId(proposal);
-        const exists = await checkProposalExists(chainId, proposalId);
-        if (!exists) {
-          await sendProposalMessage(network, proposal);
-          await saveProposal(chainId, proposalId);
-        }
+    for (const proposal of proposals) {
+      const proposalId = getProposalId(proposal);
+      const exists = await checkProposalExists(chainId, proposalId);
+      if (!exists) {
+        await sendProposalMessage(network, proposal);
+        await saveProposal(chainId, proposalId);
       }
     }
-  }, FETCH_INTERVAL_MS);
+  }
 }
 
 connectDb()
-  .then(() => {
-    monitorProposals();
+  .then(async () => {
     console.log('Bot is running and monitoring new proposals...');
+    await monitorProposals();
+    setInterval(async () => {
+      await monitorProposals()
+    }, FETCH_INTERVAL_MS)
   });

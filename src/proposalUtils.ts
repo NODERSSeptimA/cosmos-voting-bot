@@ -22,7 +22,7 @@ function getProposalType(proposal: any): string {
     return  splitCamelCaseWithSpaces(proposal.proposal_type);
   }
 
-  if (proposal.messages && proposal.messages[0]["@type"]) {
+  if (proposal.messages && proposal.messages.length && proposal.messages[0]["@type"]) {
     return splitCamelCaseWithSpaces(proposal.messages[0]["@type"]);
   }
 
@@ -89,4 +89,39 @@ function getUpgradeInfo(proposal: any): UpgradeInfo {
   return { name: 'Unknown', height: 'Unknown' };
 }
 
-export { getProposalId, getProposalType, getProposalStatus, getProposalTitle, getProposalDescription, isUpgradeProposal, getUpgradeInfo };
+function getVotingEndTime(proposal: any): string {
+  if (proposal.voting_start_time && proposal.voting_end_time) {
+    const votingEndTime = new Date(proposal.voting_end_time);
+    const votingStartTime = new Date(proposal.voting_start_time);
+    const durationMs = votingEndTime.getTime() - votingStartTime.getTime();
+
+    const days = Math.floor(durationMs / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((durationMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    let durationStr = '';
+    if (days > 0) {
+      durationStr += `${days} day${days > 1 ? 's' : ''} `;
+    }
+    if (hours > 0) {
+      durationStr += `${hours} hour${hours > 1 ? 's' : ''} `;
+    }
+    if (minutes > 0 || durationStr === '') {
+      durationStr += `${minutes} minute${minutes > 1 ? 's' : ''}`;
+    }
+
+    return new Date(proposal.voting_end_time).toLocaleString('en-GB', {
+      timeZone: 'UTC',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }) + ` UTC (${durationStr.trim()})`;
+  }
+
+  return 'Unknown';
+}
+
+export { getProposalId, getProposalType, getProposalStatus, getProposalTitle, getProposalDescription, isUpgradeProposal, getUpgradeInfo, getVotingEndTime };

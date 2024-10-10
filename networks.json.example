@@ -22,8 +22,8 @@
     {
         "name": "Artela",
         "scope": "testnet",
-        "apiEndpoint": "https://artela-testnet-api.polkachu.com",
-        "rpcEndpoint": "https://artela-testnet-rpc.polkachu.com",
+        "apiEndpoint": "https://artela-testnet-api.itrocket.net",
+        "rpcEndpoint": "https://artela-testnet-rpc.itrocket.net",
         "prefix": "art",
         "denom": "uarpt",
         "gasPrice": "0.025uart",
