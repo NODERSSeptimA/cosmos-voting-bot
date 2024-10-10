@@ -17,6 +17,7 @@ import {
   isUpgradeProposal
 } from "./proposalUtils";
 import { getBlockUrl, getProposalUrl, getTxUrl } from "./utils";
+import { getActiveProposals } from "./cosmosApi";
 
 const MNEMONIC = process.env.MNEMONIC!;
 const FETCH_INTERVAL_MS = parseInt(process.env.FETCH_INTERVAL_MS || "60000");
@@ -60,27 +61,6 @@ function getInlineKeyboardMarkup(chainId: string, proposalId: number, option: st
       ],
     ],
   };
-}
-
-async function fetchProposals(apiEndpoint: string): Promise<any[]> {
-  let response;
-  let errorMessage;
-  try {
-    response = await axios.get(`${apiEndpoint}/cosmos/gov/v1/proposals?proposal_status=2`);
-    return response.data.proposals;
-  } catch (error: AxiosError | any) {
-    errorMessage = error.message;
-  }
-
-  try {
-    response = await axios.get(`${apiEndpoint}/cosmos/gov/v1beta1/proposals?proposal_status=2`);
-    return response.data.proposals;
-  } catch (error: AxiosError | any) {
-    errorMessage = error.message;
-  }
-
-  console.error(`Error fetching proposals from ${apiEndpoint}:`, errorMessage);
-  return [];
 }
 
 async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string, proposalId: number, option: string, coinType: number) {
@@ -258,7 +238,7 @@ bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
   let thereAreActiveProposals = false;
 
   for (const network of networks) {
-    const proposals = await fetchProposals(network.apiEndpoint);
+    const proposals = await getActiveProposals(network.apiEndpoint);
     const activeProposals = proposals.filter((proposal: any) => getProposalStatus(proposal) === 'PROPOSAL_STATUS_VOTING_PERIOD');
 
     if (activeProposals.length > 0) {
@@ -282,7 +262,7 @@ async function monitorProposals() {
 
   for (const network of networks) {
     const chainId = network.chainId;
-    const proposals = await fetchProposals(network.apiEndpoint);
+    const proposals = await getActiveProposals(network.apiEndpoint);
 
     for (const proposal of proposals) {
       const proposalId = getProposalId(proposal);
