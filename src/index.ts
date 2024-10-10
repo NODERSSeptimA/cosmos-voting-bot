@@ -16,6 +16,7 @@ import {
 } from './proposalUtils';
 import { getBlockUrl, getProposalUrl, getTxUrl, isCosmosSdkNewerOrEqual } from './utils';
 import { getActiveProposals, getCosmosSdkVersion, getVoteOptionForProposal, getWalletAddress } from './cosmosApi';
+import { checkProposalExists, connectDb, saveProposal } from './database';
 
 const MNEMONIC = process.env.MNEMONIC!;
 const FETCH_INTERVAL_MS = parseInt(process.env.FETCH_INTERVAL_MS || '60000');
@@ -140,7 +141,7 @@ async function sendProposalMessage(network: Network, proposal: any) {
   const proposalTitle = getProposalTitle(proposal);
   const proposalType = getProposalType(proposal);
   const proposalUrl = getProposalUrl(network, proposalId);
-  const option = await getVoteOptionForProposal(chainId, proposalId, network.validatorWalletAddress);
+  const option = await getVoteOptionForProposal(network.apiEndpoint, proposalId, network.validatorWalletAddress);
   const votingEndsTime = getVotingEndTime(proposal);
 
   let message = dedent(`
@@ -314,20 +315,24 @@ async function monitorProposals() {
   console.log('Networks:', networks.map((network) => `${network.name}(${network.scope})`).join(', '));
 
   for (const network of networks) {
+    const chainId = network.chainId;
     const proposals = await getActiveProposals(network.apiEndpoint);
 
     for (const proposal of proposals) {
-      await sendProposalMessage(network, proposal);
+      const proposalId = getProposalId(proposal);
+      const exists = await checkProposalExists(chainId, proposalId);
+      if (!exists) {
+        await sendProposalMessage(network, proposal);
+        await saveProposal(chainId, proposalId);
+      }
     }
   }
 }
 
-async function start() {
+connectDb().then(async () => {
   console.log('Bot is running...');
   await monitorProposals();
   setInterval(async () => {
     await monitorProposals();
   }, FETCH_INTERVAL_MS);
-}
-
-start();
+});
