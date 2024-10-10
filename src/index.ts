@@ -5,7 +5,6 @@ import dedent from 'dedent';
 import 'dotenv/config';
 import * as fs from 'fs';
 import { Network } from './types';
-import { checkProposalExists, connectDb, getVoteOptionForProp, saveProposal, saveVote } from './database';
 import {
   getProposalId,
   getProposalStatus,
@@ -16,7 +15,7 @@ import {
   isUpgradeProposal,
 } from './proposalUtils';
 import { getBlockUrl, getProposalUrl, getTxUrl, isCosmosSdkNewerOrEqual } from './utils';
-import { getActiveProposals, getCosmosSdkVersion, getWalletAddress } from './cosmosApi';
+import { getActiveProposals, getCosmosSdkVersion, getVoteOptionForProposal, getWalletAddress } from './cosmosApi';
 
 const MNEMONIC = process.env.MNEMONIC!;
 const FETCH_INTERVAL_MS = parseInt(process.env.FETCH_INTERVAL_MS || '60000');
@@ -141,7 +140,7 @@ async function sendProposalMessage(network: Network, proposal: any) {
   const proposalTitle = getProposalTitle(proposal);
   const proposalType = getProposalType(proposal);
   const proposalUrl = getProposalUrl(network, proposalId);
-  const option = await getVoteOptionForProp(chainId, proposalId);
+  const option = await getVoteOptionForProposal(chainId, proposalId, network.validatorWalletAddress);
   const votingEndsTime = getVotingEndTime(proposal);
 
   let message = dedent(`
@@ -231,8 +230,6 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
         parse_mode: 'HTML' as ParseMode,
         disable_web_page_preview: true,
       });
-
-      await saveVote(chainId, Number(proposalId), option);
     } else {
       await bot.deleteMessage(inProgressMessage.chat.id, inProgressMessage.message_id);
       const errorMessage = dedent(
@@ -317,24 +314,20 @@ async function monitorProposals() {
   console.log('Networks:', networks.map((network) => `${network.name}(${network.scope})`).join(', '));
 
   for (const network of networks) {
-    const chainId = network.chainId;
     const proposals = await getActiveProposals(network.apiEndpoint);
 
     for (const proposal of proposals) {
-      const proposalId = getProposalId(proposal);
-      const exists = await checkProposalExists(chainId, proposalId);
-      if (!exists) {
-        await sendProposalMessage(network, proposal);
-        await saveProposal(chainId, proposalId);
-      }
+      await sendProposalMessage(network, proposal);
     }
   }
 }
 
-connectDb().then(async () => {
+async function start() {
   console.log('Bot is running...');
   await monitorProposals();
   setInterval(async () => {
     await monitorProposals();
   }, FETCH_INTERVAL_MS);
-});
+}
+
+start();

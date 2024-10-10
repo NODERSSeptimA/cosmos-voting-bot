@@ -41,4 +41,30 @@ async function getWalletAddress(mnemonic: string, prefix: string, coinType: numb
   return account.address;
 }
 
-export { getActiveProposals, getCosmosSdkVersion, getWalletAddress };
+async function getVoteOptionForProposal(
+  apiEndpoint: string,
+  proposalId: number,
+  walletAddress: string,
+): Promise<string> {
+  let errorMessage;
+  try {
+    const response = await axios.get(`${apiEndpoint}/cosmos/gov/v1/proposals/${proposalId}/votes/${walletAddress}`);
+    return response.data.vote.options[0].option;
+  } catch (error: AxiosError | any) {
+    errorMessage = error.message;
+  }
+
+  try {
+    const response = await axios.get(
+      `${apiEndpoint}/cosmos/gov/v1beta1/proposals/${proposalId}/votes/${walletAddress}`,
+    );
+    return response.data.vote.options[0].option;
+  } catch (error: AxiosError | any) {
+    errorMessage = error.message;
+  }
+
+  console.error(`Error fetching vote for proposal ${proposalId} from ${apiEndpoint}:`, errorMessage);
+  return 'Unknown';
+}
+
+export { getActiveProposals, getCosmosSdkVersion, getWalletAddress, getVoteOptionForProposal };
