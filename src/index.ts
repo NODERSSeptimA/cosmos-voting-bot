@@ -16,7 +16,7 @@ import {
   getVotingEndTime,
   isUpgradeProposal
 } from "./proposalUtils";
-import { getBlockUrl, getProposalUrl, getTxUrl } from "./utils";
+import { getBlockUrl, getProposalUrl, getTxUrl, isCosmosSdkNewerOrEqual } from "./utils";
 import { getActiveProposals, getCosmosSdkVersion, getWalletAddress } from "./cosmosApi";
 
 const MNEMONIC = process.env.MNEMONIC!;
@@ -63,7 +63,7 @@ function getInlineKeyboardMarkup(chainId: string, proposalId: number, option: st
   };
 }
 
-async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string, proposalId: number, option: string, coinType: number) {
+async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string, proposalId: number, option: string, cosmosSdkVersion: string, coinType: number) {
   const hdPath = makeCosmoshubPath(coinType);
   const wallet = await DirectSecp256k1HdWallet.fromMnemonic(MNEMONIC, {prefix});
   const [account] = await wallet.getAccounts();
@@ -88,8 +88,9 @@ async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string,
       break;
   }
 
+  const messageType = isCosmosSdkNewerOrEqual(cosmosSdkVersion, 'v0.47.0') ? '/cosmos.gov.v1.MsgVote' : '/cosmos.gov.v1beta1.MsgVote';
   const voteMsg = {
-    typeUrl: '/cosmos.gov.v1beta1.MsgVote',
+    typeUrl: messageType,
     value: {
       proposalId: proposalId,
       voter: account.address,
@@ -168,8 +169,9 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
       }
     );
 
+    const cosmosSdkVersion = await getCosmosSdkVersion(network.apiEndpoint);
     const coinType = network.coinType ?? 118; // TODO: add support of coin type
-    const result = await vote(network.rpcEndpoint, network.prefix, network.gasPrice, Number(proposalId), option, coinType);
+    const result = await vote(network.rpcEndpoint, network.prefix, network.gasPrice, Number(proposalId), option, cosmosSdkVersion, coinType);
     if (result && result.code === 0) {
       const opts = {
         chat_id: callbackQuery.message?.chat.id!,
