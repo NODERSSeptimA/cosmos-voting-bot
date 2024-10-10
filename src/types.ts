@@ -13,7 +13,7 @@ interface Network {
     blockUrl: string;
     txUrl: string;
     proposalUrl: string;
-  }
+  };
 }
 
 interface UpgradeInfo {

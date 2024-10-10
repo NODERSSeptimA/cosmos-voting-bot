@@ -1,4 +1,4 @@
-import { Network } from "./types";
+import { Network } from './types';
 
 function getTxUrl(network: Network, txHash: string): string {
   return network.explorer.txUrl.replace('{item}', txHash);

@@ -42,16 +42,17 @@ async function initDatabase(): Promise<void> {
 }
 
 async function saveProposal(chainId: string, proposalId: number): Promise<void> {
-    const query = 'INSERT INTO proposals(chain_id, proposal_id) VALUES($1, $2) ON CONFLICT DO NOTHING';
-    try {
-      await dbClient.query(query, [chainId, proposalId]);
-    } catch (error: any) {
-      console.error('Error saving proposal:', error.message);
-    }
+  const query = 'INSERT INTO proposals(chain_id, proposal_id) VALUES($1, $2) ON CONFLICT DO NOTHING';
+  try {
+    await dbClient.query(query, [chainId, proposalId]);
+  } catch (error: any) {
+    console.error('Error saving proposal:', error.message);
+  }
 }
 
 async function saveVote(chainId: string, proposalId: number, option: string): Promise<void> {
-  const query = 'INSERT INTO votes(chain_id, proposal_id, option) VALUES($1, $2, $3) ON CONFLICT (chain_id, proposal_id) DO UPDATE SET option = EXCLUDED.option';
+  const query =
+    'INSERT INTO votes(chain_id, proposal_id, option) VALUES($1, $2, $3) ON CONFLICT (chain_id, proposal_id) DO UPDATE SET option = EXCLUDED.option';
   try {
     await dbClient.query(query, [chainId, proposalId, option]);
   } catch (error: any) {

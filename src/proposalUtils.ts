@@ -1,4 +1,4 @@
-import { UpgradeInfo } from "./types";
+import { UpgradeInfo } from './types';
 
 function splitCamelCaseWithSpaces(messageType: string): string {
   const lastPart = messageType.split('.').pop();
@@ -19,15 +19,15 @@ function getProposalId(proposal: any): number {
 
 function getProposalType(proposal: any): string {
   if (proposal.proposal_type) {
-    return  splitCamelCaseWithSpaces(proposal.proposal_type);
+    return splitCamelCaseWithSpaces(proposal.proposal_type);
   }
 
-  if (proposal.messages && proposal.messages.length && proposal.messages[0]["@type"]) {
-    return splitCamelCaseWithSpaces(proposal.messages[0]["@type"]);
+  if (proposal.messages && proposal.messages.length && proposal.messages[0]['@type']) {
+    return splitCamelCaseWithSpaces(proposal.messages[0]['@type']);
   }
 
-  if (proposal.content && proposal.content["@type"]) {
-    return splitCamelCaseWithSpaces(proposal.content["@type"]);
+  if (proposal.content && proposal.content['@type']) {
+    return splitCamelCaseWithSpaces(proposal.content['@type']);
   }
 
   return 'Unknown';
@@ -110,18 +110,29 @@ function getVotingEndTime(proposal: any): string {
       durationStr += `${minutes} minute${minutes > 1 ? 's' : ''}`;
     }
 
-    return new Date(proposal.voting_end_time).toLocaleString('en-GB', {
-      timeZone: 'UTC',
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }) + ` UTC (${durationStr.trim()})`;
+    return (
+      new Date(proposal.voting_end_time).toLocaleString('en-GB', {
+        timeZone: 'UTC',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }) + ` UTC (${durationStr.trim()})`
+    );
   }
 
   return 'Unknown';
 }
 
-export { getProposalId, getProposalType, getProposalStatus, getProposalTitle, getProposalDescription, isUpgradeProposal, getUpgradeInfo, getVotingEndTime };
+export {
+  getProposalId,
+  getProposalType,
+  getProposalStatus,
+  getProposalTitle,
+  getProposalDescription,
+  isUpgradeProposal,
+  getUpgradeInfo,
+  getVotingEndTime,
+};
