@@ -16,6 +16,7 @@ import {
   getVotingEndTime,
   isUpgradeProposal
 } from "./proposalUtils";
+import { getBlockUrl, getProposalUrl, getTxUrl } from "./utils";
 
 const MNEMONIC = process.env.MNEMONIC!;
 const FETCH_INTERVAL_MS = parseInt(process.env.FETCH_INTERVAL_MS || "60000");
@@ -134,24 +135,26 @@ async function sendProposalMessage(network: Network, proposal: any) {
   const proposalId = getProposalId(proposal);
   const proposalTitle = getProposalTitle(proposal);
   const proposalType = getProposalType(proposal);
+  const proposalUrl = getProposalUrl(network, proposalId);
   const option = await getVoteOptionForProp(chainId, proposalId);
   const votingEndsTime = getVotingEndTime(proposal);
 
   let message = dedent(`
     🌐 <b>Network:</b> ${network.name}
     ⚖️ <b>Scope:</b> ${network.scope}
-    📜 <b>Proposal ID:</b> ${proposalId}
+    📜 <b>Proposal ID:</b> <a href="${proposalUrl}">${proposalId}</a>
     🗳 <b>Type:</b> ${proposalType}
-    📃 <b>Title:</b> ${proposalTitle}
+    📃 <b>Title:</b> <a href="${proposalUrl}">${proposalTitle}</a>
     🕓 <b>Voting ends:</b> ${votingEndsTime}
   `);
 
   if (isUpgradeProposal(proposal)) {
     const upgradeInfo = getUpgradeInfo(proposal);
+    const blockUrl = getBlockUrl(network, upgradeInfo.height);
     const upgradeInfoMessage = dedent(`
       🚀<b>Upgrade Info:</b>
       <b>Name:</b> ${upgradeInfo.name}
-      <b>Height:</b> ${upgradeInfo.height}
+      <b>Height:</b> <a href="${blockUrl}">${upgradeInfo.height}</a>
     `);
     message = message + '\n\n' + upgradeInfoMessage;
   }
@@ -201,9 +204,10 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
       await bot.editMessageReplyMarkup(opts.reply_markup, opts);
       await bot.deleteMessage(inProgressMessage.chat.id, inProgressMessage.message_id);
 
+      const txUrl = getTxUrl(network, result.transactionHash);
       const successMessage = dedent(
         `🟩 Voted <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.name} (${network.scope})</b>
-        TX hash: <a href="${network.explorer.txUrl}/${result.transactionHash}">${result.transactionHash}</a>`
+        TX hash: <a href="${txUrl}">${result.transactionHash}</a>`
       );
       await bot.sendMessage(callbackQuery.message?.chat.id!, successMessage, {
         reply_to_message_id: callbackQuery.message?.message_id,
