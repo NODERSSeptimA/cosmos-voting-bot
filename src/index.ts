@@ -1,7 +1,6 @@
 import TelegramBot, { ParseMode } from 'node-telegram-bot-api';
 import { DeliverTxResponse, GasPrice, makeCosmoshubPath, SigningStargateClient } from '@cosmjs/stargate';
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing';
-import axios, { AxiosError } from 'axios';
 import dedent from 'dedent';
 import 'dotenv/config';
 import * as fs from 'fs';
@@ -63,7 +62,16 @@ function getInlineKeyboardMarkup(chainId: string, proposalId: number, option: st
   };
 }
 
-async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string, proposalId: number, option: string, cosmosSdkVersion: string, coinType: number) {
+async function vote(
+  validatorWalletAddress: string,
+  rpcEndpoint: string,
+  prefix: string,
+  gasPriceString: string,
+  proposalId: number,
+  option: string,
+  cosmosSdkVersion: string,
+  coinType: number
+) {
   const hdPath = makeCosmoshubPath(coinType);
   const wallet = await DirectSecp256k1HdWallet.fromMnemonic(MNEMONIC, {prefix});
   const [account] = await wallet.getAccounts();
@@ -93,13 +101,21 @@ async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string,
     typeUrl: messageType,
     value: {
       proposalId: proposalId,
-      voter: account.address,
+      voter: validatorWalletAddress,
       option: voteOption,
     },
   };
 
+  const execMsg = {
+    typeUrl: '/cosmos.authz.v1beta1.MsgExec',
+    value: {
+      grantee: account.address,
+      msgs: [voteMsg],
+    },
+  };
+
   try {
-    const result = await client.signAndBroadcast(account.address, [voteMsg], 'auto');
+    const result = await client.signAndBroadcast(account.address, [execMsg], 'auto');
     console.log('Transaction result:', result.rawLog);
     return result;
   } catch (error: any) {
@@ -171,7 +187,13 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
 
     const cosmosSdkVersion = await getCosmosSdkVersion(network.apiEndpoint);
     const coinType = network.coinType ?? 118; // TODO: add support of coin type
-    const result = await vote(network.rpcEndpoint, network.prefix, network.gasPrice, Number(proposalId), option, cosmosSdkVersion, coinType);
+    const result = await vote(
+      network.validatorWalletAddress,
+      network.rpcEndpoint,
+      network.prefix,
+      network.gasPrice,
+      Number(proposalId), option, cosmosSdkVersion, coinType
+    );
     if (result && result.code === 0) {
       const opts = {
         chat_id: callbackQuery.message?.chat.id!,

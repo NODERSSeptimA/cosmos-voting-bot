@@ -7,6 +7,7 @@ interface Network {
   denom: string;
   gasPrice: string;
   chainId: string;
+  validatorWalletAddress: string;
   coinType?: number;
   explorer: {
     blockUrl: string;
