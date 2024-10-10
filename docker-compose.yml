@@ -1,0 +1,43 @@
+networks:
+  voting_bot_network:
+    driver: bridge
+
+volumes:
+  voting_bot_postgres:
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: voting_bot_postgres
+    volumes:
+      - voting_bot_postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    networks:
+      - voting_bot_network
+    expose:
+      - '5432'
+    ports:
+      - '127.0.0.1:5432:5432'
+
+  voting_bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cosmos_voting_bot
+    volumes:
+      - ./networks.json:/app/networks.json
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - CHAT_ID=${CHAT_ID}
+      - MNEMONIC=${MNEMONIC}
+      - DB_HOST=postgres
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      - postgres
+    networks:
+      - voting_bot_network
