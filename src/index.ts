@@ -1,5 +1,5 @@
 import TelegramBot, { ParseMode } from 'node-telegram-bot-api';
-import { GasPrice, makeCosmoshubPath, SigningStargateClient } from '@cosmjs/stargate';
+import { DeliverTxResponse, GasPrice, makeCosmoshubPath, SigningStargateClient } from '@cosmjs/stargate';
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing';
 import axios, { AxiosError } from 'axios';
 import dedent from 'dedent';
@@ -118,14 +118,14 @@ async function vote(rpcEndpoint: string, prefix: string, gasPriceString: string,
 
   try {
     const result = await client.signAndBroadcast(account.address, [voteMsg], 'auto');
-    console.log('Transaction result:', result);
+    console.log('Transaction result:', result.rawLog);
     return result;
   } catch (error: any) {
     console.error('Error signing and broadcasting vote:', error.message);
     return {
       code: 1,
       rawLog: error.message,
-    };
+    } as DeliverTxResponse;
   }
 }
 
@@ -178,6 +178,13 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
       return;
     }
 
+    const inProgressMessage = await bot.sendMessage(callbackQuery.message?.chat.id!, `⏳ Voting <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.name} (${network.scope})</b>`,
+      {
+        reply_to_message_id: callbackQuery.message?.message_id,
+        parse_mode: 'HTML' as ParseMode
+      }
+    );
+
     const coinType = network.coinType ?? 118; // TODO: add support of coin type
     const result = await vote(network.rpcEndpoint, network.prefix, network.gasPrice, Number(proposalId), option, coinType);
     if (result && result.code === 0) {
@@ -192,10 +199,23 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
       };
 
       await bot.editMessageReplyMarkup(opts.reply_markup, opts);
+      await bot.deleteMessage(inProgressMessage.chat.id, inProgressMessage.message_id);
+
+      const successMessage = dedent(
+        `🟩 Voted <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.name} (${network.scope})</b>
+        TX hash: <a href="${network.explorer.txUrl}/${result.transactionHash}">${result.transactionHash}</a>`
+      );
+      await bot.sendMessage(callbackQuery.message?.chat.id!, successMessage, {
+        reply_to_message_id: callbackQuery.message?.message_id,
+        parse_mode: 'HTML' as ParseMode,
+        disable_web_page_preview: true
+      });
+
       await saveVote(chainId, Number(proposalId), option);
     } else {
+      await bot.deleteMessage(inProgressMessage.chat.id, inProgressMessage.message_id);
       const errorMessage = dedent(
-        `🟥 Error voting for proposal <b>#${proposalId}</b> in network <b>${network.name}:</b>
+        `🟥 Error voting for proposal <b>#${proposalId}</b> in <b>${network.name}:</b>
         ${result.rawLog}`
       );
       await bot.sendMessage(callbackQuery.message?.chat.id!, errorMessage, {
@@ -253,6 +273,7 @@ bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
 
 async function monitorProposals() {
   networks = JSON.parse(fs.readFileSync('networks.json', 'utf-8'));
+  console.log("Fetching proposals from networks...");
   console.log('Networks:', networks.map((network) => `${network.name}(${network.scope})`).join(', '));
 
   for (const network of networks) {
@@ -272,7 +293,7 @@ async function monitorProposals() {
 
 connectDb()
   .then(async () => {
-    console.log('Bot is running and monitoring new proposals...');
+    console.log('Bot is running...');
     await monitorProposals();
     setInterval(async () => {
       await monitorProposals()

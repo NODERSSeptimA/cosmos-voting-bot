@@ -8,6 +8,11 @@ interface Network {
   gasPrice: string;
   chainId: string;
   coinType?: number;
+  explorer: {
+    blockUrl: string;
+    txUrl: string;
+    proposalUrl: string;
+  }
 }
 
 interface UpgradeInfo {

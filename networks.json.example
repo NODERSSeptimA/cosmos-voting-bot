@@ -1,42 +1,62 @@
 [
-    {
-        "name": "Cosmos Hub",
-        "scope": "mainnet",
-        "apiEndpoint": "https://cosmoshub.api.kjnodes.com",
-        "rpcEndpoint": "https://rpc.cosmos.network",
-        "prefix": "cosmos",
-        "denom": "uatom",
-        "gasPrice": "0.025uatom",
-        "chainId": "cosmoshub-4"
-    },
-    {
-        "name": "Osmosis",
-        "scope": "mainnet",
-        "apiEndpoint": "https://lcd.osmosis.zone",
-        "rpcEndpoint": "https://rpc.osmosis.zone",
-        "prefix": "osmo",
-        "denom": "uosmo",
-        "gasPrice": "0.025uosmo",
-        "chainId": "osmosis-1"
-    },
-    {
-        "name": "Artela",
-        "scope": "testnet",
-        "apiEndpoint": "https://artela-testnet-api.itrocket.net",
-        "rpcEndpoint": "https://artela-testnet-rpc.itrocket.net",
-        "prefix": "art",
-        "denom": "uarpt",
-        "gasPrice": "0.025uart",
-        "chainId": "artela_11822-1"
-    },
-    {
-        "name": "Jackal",
-        "scope": "mainnet",
-        "apiEndpoint": "https://jackal-api.polkachu.com",
-        "rpcEndpoint": "https://jackal-rpc.polkachu.com",
-        "prefix": "jkl",
-        "denom": "ujkl",
-        "gasPrice": "0.025ujkl",
-        "chainId": "jackal-1"
+  {
+    "name": "Cosmos Hub",
+    "scope": "mainnet",
+    "chainId": "cosmoshub-4",
+    "apiEndpoint": "https://cosmoshub.api.kjnodes.com",
+    "rpcEndpoint": "https://rpc.cosmos.network",
+    "prefix": "cosmos",
+    "denom": "uatom",
+    "gasPrice": "0.025uatom",
+    "explorer": {
+      "txUrl": "https://ping.pub/cosmos/tx/",
+      "blockUrl": "https://ping.pub/cosmos/block/",
+      "proposalUrl": "https://ping.pub/cosmos/gov/"
     }
+  },
+  {
+    "name": "Osmosis",
+    "scope": "mainnet",
+    "chainId": "osmosis-1",
+    "apiEndpoint": "https://lcd.osmosis.zone",
+    "rpcEndpoint": "https://rpc.osmosis.zone",
+    "prefix": "osmo",
+    "denom": "uosmo",
+    "gasPrice": "0.025uosmo",
+    "explorer": {
+      "txUrl": "https://ping.pub/osmosis/tx/",
+      "blockUrl": "https://ping.pub/osmosis/block/",
+      "proposalUrl": "https://ping.pub/osmosis/gov/"
+    }
+  },
+  {
+    "name": "Artela",
+    "scope": "testnet",
+    "chainId": "artela_11822-1",
+    "apiEndpoint": "https://artela-testnet-api.itrocket.net",
+    "rpcEndpoint": "https://artela-testnet-rpc.itrocket.net",
+    "prefix": "art",
+    "denom": "uarpt",
+    "gasPrice": "0.025uart",
+    "explorer": {
+      "txUrl": "https://testnet.artela.itrocket.net/tx/",
+      "blockUrl": "https://testnet.artela.itrocket.net/block/",
+      "proposalUrl": "https://testnet.artela.itrocket.net/gov/"
+    }
+  },
+  {
+    "name": "Jackal",
+    "scope": "mainnet",
+    "chainId": "jackal-1",
+    "apiEndpoint": "https://jackal-api.polkachu.com",
+    "rpcEndpoint": "https://jackal-rpc.polkachu.com",
+    "prefix": "jkl",
+    "denom": "ujkl",
+    "gasPrice": "0.025ujkl",
+    "explorer": {
+      "txUrl": "https://ping.pub/jackal/tx/",
+      "blockUrl": "https://ping.pub/jackal/block/",
+      "proposalUrl": "https://ping.pub/jackal/gov/"
+    }
+  }
 ]
