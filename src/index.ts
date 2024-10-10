@@ -17,7 +17,7 @@ import {
   isUpgradeProposal
 } from "./proposalUtils";
 import { getBlockUrl, getProposalUrl, getTxUrl } from "./utils";
-import { getActiveProposals } from "./cosmosApi";
+import { getActiveProposals, getCosmosSdkVersion, getWalletAddress } from "./cosmosApi";
 
 const MNEMONIC = process.env.MNEMONIC!;
 const FETCH_INTERVAL_MS = parseInt(process.env.FETCH_INTERVAL_MS || "60000");
@@ -216,22 +216,37 @@ bot.setMyCommands([
   {command: '/active_proposals', description: 'show active proposals'},
 ]);
 
+const fetchNetworkDetails = async (network: Network) => {
+  const [sdkVersion, walletAddress] = await Promise.all([
+    getCosmosSdkVersion(network.apiEndpoint),
+    getWalletAddress(MNEMONIC, network.prefix, network.coinType ?? 118)
+  ]);
+
+  return dedent(`
+        🌐 <b>${network.name}</>
+        SDK Version: ${sdkVersion}
+        Address: ${walletAddress}
+    `);
+};
+
 bot.onText(/\/networks/, async (msg: TelegramBot.Message) => {
-  const testnetNetworks = networks
-    .filter((network) => network.scope === 'testnet')
-    .map((network) => `- ${network.name}`).join('\n');
-  const mainnetNetworks = networks
-    .filter((network) => network.scope === 'mainnet')
-    .map((network) => `- ${network.name}`).join('\n');
+  const mainnetNetworks = networks.filter((network) => network.scope === 'mainnet');
+  const mainnetDetails = await Promise.all(mainnetNetworks.map(fetchNetworkDetails));
+  const mainnetDetailsMessage = mainnetDetails.join('\n\n');
+
+  const testnetNetworks = networks.filter((network) => network.scope === 'testnet');
+  const testnetDetails = await Promise.all(testnetNetworks.map(fetchNetworkDetails));
+  const testnetDetailsMessage = testnetDetails.join('\n\n');
 
   let message = `Supported networks:\n\n`;
-  if (testnetNetworks.length > 0) {
-    message += `Testnet:\n${testnetNetworks}\n\n`;
-  }
   if (mainnetNetworks.length > 0) {
-    message += `Mainnet:\n${mainnetNetworks}`;
+    message += `🟩 <b>MAINNET:</b>\n${mainnetDetailsMessage}\n\n`;
   }
-  await bot.sendMessage(msg.chat.id, message);
+  if (testnetNetworks.length > 0) {
+    message += `🟨 <b>TESTNET:</b>\n${testnetDetailsMessage}`;
+  }
+
+  await bot.sendMessage(msg.chat.id, message, {parse_mode: 'HTML' as ParseMode});
 });
 
 bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
