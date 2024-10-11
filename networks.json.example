@@ -8,6 +8,7 @@
     "prefix": "cosmos",
     "denom": "uatom",
     "gasPrice": "0.025uatom",
+    "validatorWallet": "jkl1xqgusvgn7qf84eq4x4cft9yt9z4lcrplhxcqum",
     "explorer": {
       "txUrl": "https://ping.pub/cosmos/tx/",
       "blockUrl": "https://ping.pub/cosmos/block/",
@@ -23,6 +24,7 @@
     "prefix": "osmo",
     "denom": "uosmo",
     "gasPrice": "0.025uosmo",
+    "validatorWallet": "jkl1xqgusvgn7qf84eq4x4cft9yt9z4lcrplhxcqum",
     "explorer": {
       "txUrl": "https://ping.pub/osmosis/tx/",
       "blockUrl": "https://ping.pub/osmosis/block/",
@@ -38,6 +40,7 @@
     "prefix": "art",
     "denom": "uarpt",
     "gasPrice": "0.025uart",
+    "validatorWallet": "jkl1xqgusvgn7qf84eq4x4cft9yt9z4lcrplhxcqum",
     "explorer": {
       "txUrl": "https://testnet.artela.itrocket.net/tx/",
       "blockUrl": "https://testnet.artela.itrocket.net/block/",
@@ -53,6 +56,7 @@
     "prefix": "jkl",
     "denom": "ujkl",
     "gasPrice": "0.025ujkl",
+    "validatorWallet": "jkl1xqgusvgn7qf84eq4x4cft9yt9z4lcrplhxcqum",
     "explorer": {
       "txUrl": "https://ping.pub/jackal/tx/",
       "blockUrl": "https://ping.pub/jackal/block/",

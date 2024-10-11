@@ -20,10 +20,10 @@ are detected.
 
 1. Start the bot:
     ```sh
-    npm start
+    npm run dev
     ```
 
-2. The bot will connect to the database, start monitoring proposals, and log messages to the console.
+2. The bot will create a SQLite database, start monitoring proposals, and log messages to the console.
 
 ## Configuration
 
@@ -44,17 +44,4 @@ are detected.
    # bot
    BOT_TOKEN=your_telegram_bot_token_here
    CHAT_ID=your_telegram_chat_id_here
-   
-   # database
-   DB_HOST=127.0.0.1
-   DB_NAME=cosmos_voting_bot
-   DB_USER=postgres
-   DB_PASSWORD=your_database_password
    ```
-
-## Production
-
-1. Start the bot in production mode using Docker:
-    ```sh
-    sudo docker compose up -d
-    ```
