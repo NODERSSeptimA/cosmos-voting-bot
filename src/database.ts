@@ -1,58 +1,71 @@
-import { Client } from 'pg';
-import 'dotenv/config';
+import sqlite3 from 'sqlite3';
 
-const dbClient = new Client({
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT || '5432', 10),
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-});
+let db: sqlite3.Database;
 
-async function connectDb(): Promise<void> {
-  try {
-    await dbClient.connect();
-    console.log('Connected to the database');
-    await initDatabase();
-  } catch (error: any) {
-    console.error('Error connecting to the database:', error.message);
-  }
+function connectDb(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      db = new sqlite3.Database('./database.sqlite', (err) => {
+        if (err) {
+          console.error('Error connecting to the database:', err.message);
+          reject(err);
+        } else {
+          console.log('Connected to the SQLite database');
+          initDatabase()
+            .then(() => resolve())
+            .catch((error) => reject(error));
+        }
+      });
+    } catch (error: any) {
+      console.error('Error connecting to the database:', error.message);
+      reject(error);
+    }
+  });
 }
 
-async function initDatabase(): Promise<void> {
+function initDatabase(): Promise<void> {
   const query = `
-    CREATE TABLE IF NOT EXISTS proposals (
-      chain_id VARCHAR(255) NOT NULL,
-      proposal_id INTEGER NOT NULL,
-      PRIMARY KEY (chain_id, proposal_id)
-    );
+      CREATE TABLE IF NOT EXISTS proposals
+      (
+          chain_id    TEXT    NOT NULL,
+          proposal_id INTEGER NOT NULL,
+          PRIMARY KEY (chain_id, proposal_id)
+      );
   `;
-  try {
-    await dbClient.query(query);
-    console.log('Database has been initialized');
-  } catch (error: any) {
-    console.error('Error initializing database:', error.message);
-  }
+  return new Promise((resolve, reject) => {
+    db.run(query, (err) => {
+      if (err) {
+        console.error('Error initializing database:', err.message);
+        reject(err);
+      } else {
+        console.log('Database has been initialized');
+        resolve();
+      }
+    });
+  });
 }
 
-async function saveProposal(chainId: string, proposalId: number): Promise<void> {
-  const query = 'INSERT INTO proposals(chain_id, proposal_id) VALUES($1, $2) ON CONFLICT DO NOTHING';
-  try {
-    await dbClient.query(query, [chainId, proposalId]);
-  } catch (error: any) {
-    console.error('Error saving proposal:', error.message);
-  }
+function saveProposal(chainId: string, proposalId: number): void {
+  const query = 'INSERT OR IGNORE INTO proposals (chain_id, proposal_id) VALUES (?, ?)';
+  db.run(query, [chainId, proposalId], (err) => {
+    if (err) {
+      console.error('Error saving proposal:', err.message);
+    }
+  });
 }
 
-async function checkProposalExists(chainId: string, proposalId: number): Promise<boolean> {
-  const query = 'SELECT * FROM proposals WHERE chain_id = $1 AND proposal_id = $2';
-  try {
-    const res = await dbClient.query(query, [chainId, proposalId]);
-    return res.rows.length > 0;
-  } catch (error: any) {
-    console.error('Error checking proposal:', error.message);
-    return false;
-  }
+function checkProposalExists(chainId: string, proposalId: number): Promise<boolean> {
+  const query = 'SELECT * FROM proposals WHERE chain_id = ? AND proposal_id = ?';
+  return new Promise((resolve) => {
+    db.get(query, [chainId, proposalId], (err, row) => {
+      if (err) {
+        console.error('Error checking proposal:', err.message);
+        resolve(false);
+      } else {
+        resolve(!!row);
+      }
+    });
+  });
 }
 
 export { connectDb, saveProposal, checkProposalExists };
