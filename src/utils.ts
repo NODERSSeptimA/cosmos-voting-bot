@@ -1,15 +1,5 @@
-import { Network } from './types';
-
-function getTxUrl(network: Network, txHash: string): string {
-  return network.explorer.txUrl.replace('{item}', txHash);
-}
-
-function getBlockUrl(network: Network, height: string): string {
-  return network.explorer.blockUrl.replace('{item}', height);
-}
-
-function getProposalUrl(network: Network, proposalId: number): string {
-  return network.explorer.proposalUrl.replace('{item}', `${proposalId}`);
+function getUrlFromTemplate(template: string, item: string): string {
+  return template ? template.replace('{item}', item) : item;
 }
 
 function isCosmosSdkNewerOrEqual(a: string, b: string): boolean {
@@ -33,4 +23,4 @@ function isCosmosSdkNewerOrEqual(a: string, b: string): boolean {
   return versionA.patch >= versionB.patch;
 }
 
-export { getTxUrl, getBlockUrl, getProposalUrl, isCosmosSdkNewerOrEqual };
+export { getUrlFromTemplate, isCosmosSdkNewerOrEqual };

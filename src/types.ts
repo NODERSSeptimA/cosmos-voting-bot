@@ -1,15 +1,22 @@
 interface Network {
   name: string;
+  prettyName: string;
   scope: string;
-  apiEndpoint: string;
-  rpcEndpoint: string;
   prefix: string;
   denom: string;
   gasPrice: string;
   chainId: string;
-  validatorWalletAddress: string;
   coinType?: number;
+  validator: {
+    walletAddress: string;
+    validatorAddress: string;
+  };
+  endpoints: {
+    api: string;
+    rpc: string;
+  };
   explorer: {
+    accountUrl: string;
     blockUrl: string;
     txUrl: string;
     proposalUrl: string;

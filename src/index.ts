@@ -3,7 +3,6 @@ import { DeliverTxResponse, GasPrice, makeCosmoshubPath, SigningStargateClient }
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing';
 import dedent from 'dedent';
 import 'dotenv/config';
-import * as fs from 'fs';
 import { Network } from './types';
 import {
   getProposalId,
@@ -14,9 +13,10 @@ import {
   getVotingEndTime,
   isUpgradeProposal,
 } from './proposalUtils';
-import { getBlockUrl, getProposalUrl, getTxUrl, isCosmosSdkNewerOrEqual } from './utils';
+import { getUrlFromTemplate, isCosmosSdkNewerOrEqual } from './utils';
 import { getActiveProposals, getCosmosSdkVersion, getVoteOptionForProposal, getWalletAddress } from './cosmosApi';
 import { checkProposalExists, connectDb, saveProposal } from './database';
+import { getNetworks } from './registryApi';
 
 const MNEMONIC = process.env.MNEMONIC!;
 const FETCH_INTERVAL_MS = parseInt(process.env.FETCH_INTERVAL_MS || '60000');
@@ -140,8 +140,8 @@ async function sendProposalMessage(network: Network, proposal: any) {
   const proposalId = getProposalId(proposal);
   const proposalTitle = getProposalTitle(proposal);
   const proposalType = getProposalType(proposal);
-  const proposalUrl = getProposalUrl(network, proposalId);
-  const option = await getVoteOptionForProposal(network.apiEndpoint, proposalId, network.validatorWalletAddress);
+  const proposalUrl = getUrlFromTemplate(network.explorer.proposalUrl, proposalId.toString());
+  const option = await getVoteOptionForProposal(network.endpoints.api, proposalId, network.validator.walletAddress);
   const votingEndsTime = getVotingEndTime(proposal);
 
   let message = dedent(`
@@ -155,7 +155,7 @@ async function sendProposalMessage(network: Network, proposal: any) {
 
   if (isUpgradeProposal(proposal)) {
     const upgradeInfo = getUpgradeInfo(proposal);
-    const blockUrl = getBlockUrl(network, upgradeInfo.height);
+    const blockUrl = getUrlFromTemplate(network.explorer.blockUrl, upgradeInfo.height);
     const upgradeInfoMessage = dedent(`
       🚀<b>Upgrade Info:</b>
       <b>Name:</b> ${upgradeInfo.name}
@@ -195,11 +195,11 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
       },
     );
 
-    const cosmosSdkVersion = await getCosmosSdkVersion(network.apiEndpoint);
+    const cosmosSdkVersion = await getCosmosSdkVersion(network.endpoints.api);
     const coinType = network.coinType ?? 118; // TODO: add support of coin type
     const result = await vote(
-      network.validatorWalletAddress,
-      network.rpcEndpoint,
+      network.validator.walletAddress,
+      network.endpoints.rpc,
       network.prefix,
       network.gasPrice,
       Number(proposalId),
@@ -221,7 +221,7 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
       await bot.editMessageReplyMarkup(opts.reply_markup, opts);
       await bot.deleteMessage(inProgressMessage.chat.id, inProgressMessage.message_id);
 
-      const txUrl = getTxUrl(network, result.transactionHash);
+      const txUrl = getUrlFromTemplate(network.explorer.txUrl, result.transactionHash);
       const successMessage = dedent(
         `🟩 Voted <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.name} (${network.scope})</b>
         TX hash: <a href="${txUrl}">${result.transactionHash}</a>`,
@@ -251,26 +251,27 @@ bot.setMyCommands([
   { command: '/active_proposals', description: 'show active proposals' },
 ]);
 
-const fetchNetworkDetails = async (network: Network) => {
+const getNetworkDetails = async (network: Network) => {
+  const accountUrl = getUrlFromTemplate(network.explorer.accountUrl, network.validator.walletAddress);
   const [sdkVersion, walletAddress] = await Promise.all([
-    getCosmosSdkVersion(network.apiEndpoint),
+    getCosmosSdkVersion(network.endpoints.api),
     getWalletAddress(MNEMONIC, network.prefix, network.coinType ?? 118),
   ]);
 
   return dedent(`
-        🌐 <b>${network.name}</>
+        🌐 <b>${network.prettyName}</>
         SDK Version: ${sdkVersion}
-        Address: ${walletAddress}
+        Address: <a href="${accountUrl}">${walletAddress}</a>
     `);
 };
 
 bot.onText(/\/networks/, async (msg: TelegramBot.Message) => {
   const mainnetNetworks = networks.filter((network) => network.scope === 'mainnet');
-  const mainnetDetails = await Promise.all(mainnetNetworks.map(fetchNetworkDetails));
+  const mainnetDetails = await Promise.all(mainnetNetworks.map(getNetworkDetails));
   const mainnetDetailsMessage = mainnetDetails.join('\n\n');
 
   const testnetNetworks = networks.filter((network) => network.scope === 'testnet');
-  const testnetDetails = await Promise.all(testnetNetworks.map(fetchNetworkDetails));
+  const testnetDetails = await Promise.all(testnetNetworks.map(getNetworkDetails));
   const testnetDetailsMessage = testnetDetails.join('\n\n');
 
   let message = `Supported networks:\n\n`;
@@ -288,7 +289,7 @@ bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
   let thereAreActiveProposals = false;
 
   for (const network of networks) {
-    const proposals = await getActiveProposals(network.apiEndpoint);
+    const proposals = await getActiveProposals(network.endpoints.api);
     const activeProposals = proposals.filter(
       (proposal: any) => getProposalStatus(proposal) === 'PROPOSAL_STATUS_VOTING_PERIOD',
     );
@@ -309,30 +310,38 @@ bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
   }
 });
 
-async function monitorProposals() {
-  networks = JSON.parse(fs.readFileSync('networks.json', 'utf-8'));
-  console.log('Fetching proposals from networks...');
+async function fetchNewActiveProposals() {
+  console.log('Fetching active proposals from networks...');
+  networks = await getNetworks();
+
+  networks = networks.filter((network) => network.endpoints?.api).filter((network) => network.scope === 'mainnet');
   console.log('Networks:', networks.map((network) => `${network.name}(${network.scope})`).join(', '));
 
   for (const network of networks) {
-    const chainId = network.chainId;
-    const proposals = await getActiveProposals(network.apiEndpoint);
+    console.log(`Fetching proposals for ${network.name} (${network.scope}). ChainID: ${network.chainId} ...`);
+    if (!network.endpoints?.api) {
+      console.error(`Error: API endpoint not found for network ${network.name} (${network.scope})`);
+      continue;
+    }
 
+    const chainId = network.chainId;
+    const proposals = await getActiveProposals(network.endpoints.api);
     for (const proposal of proposals) {
       const proposalId = getProposalId(proposal);
       const exists = await checkProposalExists(chainId, proposalId);
       if (!exists) {
         await sendProposalMessage(network, proposal);
-        await saveProposal(chainId, proposalId);
+        saveProposal(chainId, proposalId);
       }
     }
   }
+  console.log('Done. Proposals fetched.');
 }
 
 connectDb().then(async () => {
   console.log('Bot is running...');
-  await monitorProposals();
+  await fetchNewActiveProposals();
   setInterval(async () => {
-    await monitorProposals();
+    await fetchNewActiveProposals();
   }, FETCH_INTERVAL_MS);
 });
