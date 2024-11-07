@@ -19,6 +19,7 @@ import { checkProposalExists, connectDb, saveProposal } from './database';
 import { getNetworks } from './registryApi';
 
 const MNEMONIC = process.env.MNEMONIC!;
+const SCOPE = process.env.SCOPE || 'mainnet';
 const FETCH_INTERVAL_MS = parseInt(process.env.FETCH_INTERVAL_MS || '60000');
 
 // Telegram Bot configuration
@@ -252,37 +253,34 @@ bot.setMyCommands([
 ]);
 
 const getNetworkDetails = async (network: Network) => {
-  const accountUrl = getUrlFromTemplate(network.explorer.accountUrl, network.validator.walletAddress);
-  const [sdkVersion, walletAddress] = await Promise.all([
+  const [sdkVersion, voterAddress] = await Promise.all([
     getCosmosSdkVersion(network.endpoints.api),
     getWalletAddress(MNEMONIC, network.prefix, network.coinType ?? 118),
   ]);
+  const accountUrl = getUrlFromTemplate(network.explorer.accountUrl, voterAddress);
 
   return dedent(`
         🌐 <b>${network.prettyName}</>
         SDK Version: ${sdkVersion}
-        Address: <a href="${accountUrl}">${walletAddress}</a>
+        Voter Address: <a href="${accountUrl}">${voterAddress}</a>
     `);
 };
 
 bot.onText(/\/networks/, async (msg: TelegramBot.Message) => {
-  const mainnetNetworks = networks.filter((network) => network.scope === 'mainnet');
-  const mainnetDetails = await Promise.all(mainnetNetworks.map(getNetworkDetails));
-  const mainnetDetailsMessage = mainnetDetails.join('\n\n');
-
-  const testnetNetworks = networks.filter((network) => network.scope === 'testnet');
-  const testnetDetails = await Promise.all(testnetNetworks.map(getNetworkDetails));
-  const testnetDetailsMessage = testnetDetails.join('\n\n');
+  const details = await Promise.all(networks.map(getNetworkDetails));
+  const detailsMessage = details.join('\n\n');
 
   let message = `Supported networks:\n\n`;
-  if (mainnetNetworks.length > 0) {
-    message += `🟩 <b>MAINNET:</b>\n${mainnetDetailsMessage}\n\n`;
-  }
-  if (testnetNetworks.length > 0) {
-    message += `🟨 <b>TESTNET:</b>\n${testnetDetailsMessage}`;
+  if (details.length > 0) {
+    message += `🟩 Scope: <b>MAINNET</b>\n\n${detailsMessage}`;
+  } else {
+    message += `No networks found. Please check config`;
   }
 
-  await bot.sendMessage(msg.chat.id, message, { parse_mode: 'HTML' as ParseMode });
+  await bot.sendMessage(msg.chat.id, message, {
+    parse_mode: 'HTML' as ParseMode,
+    disable_web_page_preview: true,
+  });
 });
 
 bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
@@ -314,7 +312,7 @@ async function fetchNewActiveProposals() {
   console.log('Fetching active proposals from networks...');
   networks = await getNetworks();
 
-  networks = networks.filter((network) => network.endpoints?.api).filter((network) => network.scope === 'mainnet');
+  networks = networks.filter((network) => network.endpoints?.api).filter((network) => network.scope === SCOPE);
   console.log('Networks:', networks.map((network) => `${network.name}(${network.scope})`).join(', '));
 
   for (const network of networks) {
