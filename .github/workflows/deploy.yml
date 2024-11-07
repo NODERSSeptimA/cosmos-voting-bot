@@ -53,12 +53,12 @@ jobs:
                   "autorestart": true,
                   "restart_delay": 1000,
                   "env": {
-                    "MNEMONIC": "MNEMONIC",
-                    "SCOPE": "SCOPE",
-                    "BOT_TOKEN": "BOT_TOKEN",
-                    "CHAT_ID": "CHAT_ID",
-                    "REGISTRY_API_URL": "REGISTRY_API_URL",
-                    "REGISTRY_API_TOKEN": "REGISTRY_API_TOKEN"
+                    "MNEMONIC": "$MNEMONIC",
+                    "SCOPE": "$SCOPE",
+                    "BOT_TOKEN": "$BOT_TOKEN",
+                    "CHAT_ID": "$CHAT_ID",
+                    "REGISTRY_API_URL": "$REGISTRY_API_URL",
+                    "REGISTRY_API_TOKEN": "$REGISTRY_API_TOKEN"
                   }
                 }
               ]
