@@ -1,4 +1,4 @@
-name: Build and Deploy
+name: Build and Deploy Voting Bot
 
 on:
   workflow_dispatch:
@@ -14,22 +14,18 @@ jobs:
       - name: Build and Deploy
         uses: appleboy/ssh-action@master
         env:
-          APP_KEYS: ${{ secrets.APP_KEYS }}
-          API_TOKEN_SALT: ${{ secrets.API_TOKEN_SALT }}
-          ADMIN_JWT_SECRET: ${{ secrets.ADMIN_JWT_SECRET }}
-          TRANSFER_TOKEN_SALT: ${{ secrets.TRANSFER_TOKEN_SALT }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          DATABASE_HOST: ${{ secrets.DATABASE_HOST }}
-          DATABASE_PORT: ${{ secrets.DATABASE_PORT }}
-          DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
-          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
-          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+          MNEMONIC: ${{ secrets.MNEMONIC }}
+          SCOPE: 'mainnet'
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ vars.CHAT_ID }}
+          REGISTRY_API_URL: ${{ vars.REGISTRY_API_URL }}
+          REGISTRY_API_TOKEN: ${{ secrets.REGISTRY_API_TOKEN }}
         with:
           host: ${{ secrets.HOST }}
           port: ${{ secrets.PORT }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.KEY }}
-          envs: APP_KEYS,API_TOKEN_SALT,ADMIN_JWT_SECRET,TRANSFER_TOKEN_SALT,JWT_SECRET,DATABASE_HOST,DATABASE_PORT,DATABASE_NAME,DATABASE_USERNAME,DATABASE_PASSWORD
+          envs: MNEMONIC,SCOPE,BOT_TOKEN,CHAT_ID,REGISTRY_API_URL,REGISTRY_API_TOKEN
           script: |
             # set node env
             export NVM_DIR=~/.nvm
@@ -37,47 +33,32 @@ jobs:
             nvm use 20
             
             # checkout
-            cd ~/registry
-            git reset --hard origin/main
+            cd ~/cosmos-voting-bot
             git pull origin main
             
-            # build noders-registry plugin
-            cd ~/registry/src/plugins/noders-registry
-            yarn install
-            NODE_ENV=production yarn build || exit 1
-            
-            # build strapi
-            cd ~/registry
-            yarn install
-            NODE_ENV=production yarn build || exit 1
+            # build cosmos-voting-bot
+            cd ~/cosmos-voting-bot
+            npm install
+            NODE_ENV=production npm run build
             
             # generate ecosystem.config.json
-            cat <<EOT > ~/registry/ecosystem.config.json
+            cat <<EOT > ~/cosmos-voting-bot/ecosystem.config.json
             {
               "apps": [
                 {
-                  "name": "noders-registry-strapi-app",
-                  "cwd": "/home/registry/registry",
-                  "script": "yarn",
+                  "name": "cosmos-voting-bot",
+                  "cwd": "/home/votingbot/cosmos-voting-bot",
+                  "script": "npm",
                   "args": "start",
                   "autorestart": true,
                   "restart_delay": 1000,
                   "env": {
-                    "HOST": "0.0.0.0",
-                    "PORT": "1337",
-                    "NODE_ENV": "production",
-                    "APP_KEYS": "$APP_KEYS",
-                    "API_TOKEN_SALT": "$API_TOKEN_SALT",
-                    "ADMIN_JWT_SECRET": "$ADMIN_JWT_SECRET",
-                    "TRANSFER_TOKEN_SALT": "$TRANSFER_TOKEN_SALT",
-                    "JWT_SECRET": "$JWT_SECRET",
-                    "DATABASE_CLIENT": "postgres",
-                    "DATABASE_HOST": "$DATABASE_HOST",
-                    "DATABASE_PORT": "$DATABASE_PORT",
-                    "DATABASE_NAME": "$DATABASE_NAME",
-                    "DATABASE_USERNAME": "$DATABASE_USERNAME",
-                    "DATABASE_PASSWORD": "$DATABASE_PASSWORD",
-                    "DATABASE_SSL": "false"
+                    "MNEMONIC": "MNEMONIC",
+                    "SCOPE": "SCOPE",
+                    "BOT_TOKEN": "BOT_TOKEN",
+                    "CHAT_ID": "CHAT_ID",
+                    "REGISTRY_API_URL": "REGISTRY_API_URL",
+                    "REGISTRY_API_TOKEN": "REGISTRY_API_TOKEN"
                   }
                 }
               ]
@@ -85,4 +66,4 @@ jobs:
             EOT
             
             # restart pm2
-            pm2 restart ~/registry/ecosystem.config.json
+            pm2 restart ~/cosmos-voting-bot/ecosystem.config.json

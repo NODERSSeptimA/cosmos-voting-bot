@@ -4,3 +4,4 @@ dist
 .env
 networks.json
 database.sqlite
+ecosystem.config.json
