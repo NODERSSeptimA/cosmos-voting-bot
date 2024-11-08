@@ -6,20 +6,19 @@ import 'dotenv/config';
 import { Network } from './types';
 import {
   getProposalId,
-  getProposalStatus,
   getProposalTitle,
   getProposalType,
   getUpgradeInfo,
   getVotingEndTime,
   isUpgradeProposal,
 } from './proposalUtils';
-import { getUrlFromTemplate, isCosmosSdkNewerOrEqual } from './utils';
-import { getActiveProposals, getCosmosSdkVersion, getVoteOptionForProposal, getWalletAddress } from './cosmosApi';
+import { getUrlFromTemplate, getVoteMessageType } from './utils';
+import { getActiveProposals, getCosmosSdkVersion, getVoteOptionForProposal } from './api/cosmosApi';
 import { checkProposalExists, connectDb, saveProposal } from './database';
-import { getNetworks } from './registryApi';
+import { getNetworks } from './api/registryApi';
+import { registerCommandHandlers } from './commandHandler';
 
 const MNEMONIC = process.env.MNEMONIC!;
-const SCOPE = process.env.SCOPE || 'mainnet';
 const FETCH_INTERVAL_MS = parseInt(process.env.FETCH_INTERVAL_MS || '60000');
 
 // Telegram Bot configuration
@@ -46,21 +45,21 @@ function getInlineKeyboardMarkup(
       [
         {
           text: option === 'yes' ? `✅ VOTED: ${VoteButtons.YES}` : VoteButtons.YES,
-          callback_data: `vote__yes__${chainId}__${proposalId}`,
+          callback_data: `vote__${chainId}__yes__${proposalId}`,
         },
         {
           text: option === 'no' ? `✅ VOTED: ${VoteButtons.NO}` : VoteButtons.NO,
-          callback_data: `vote__no__${chainId}__${proposalId}`,
+          callback_data: `vote__${chainId}__no__${proposalId}`,
         },
       ],
       [
         {
           text: option === 'veto' ? `✅ VOTED: ${VoteButtons.NO_WITH_VETO}` : VoteButtons.NO_WITH_VETO,
-          callback_data: `vote__veto__${chainId}__${proposalId}`,
+          callback_data: `vote__${chainId}__veto__${proposalId}`,
         },
         {
           text: option === 'abstain' ? `✅ VOTED: ${VoteButtons.ABSTAIN}` : VoteButtons.ABSTAIN,
-          callback_data: `vote__abstain__${chainId}__${proposalId}`,
+          callback_data: `vote__${chainId}__abstain__${proposalId}`,
         },
       ],
     ],
@@ -103,9 +102,7 @@ async function vote(
       break;
   }
 
-  const messageType = isCosmosSdkNewerOrEqual(cosmosSdkVersion, 'v0.47.0')
-    ? '/cosmos.gov.v1.MsgVote'
-    : '/cosmos.gov.v1beta1.MsgVote';
+  const messageType = getVoteMessageType(cosmosSdkVersion);
   const voteMsg = {
     typeUrl: messageType,
     value: {
@@ -176,29 +173,24 @@ async function sendProposalMessage(network: Network, proposal: any) {
   await bot.sendMessage(CHAT_ID, message, opts);
 }
 
-// Button click handler
-bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
-  const [action, option, chainId, proposalId] = callbackQuery.data!.split('__');
+async function handleVoteCommand(callbackQuery: TelegramBot.CallbackQuery, network: Network) {
+  const [action, chainId, option, proposalId] = callbackQuery.data!.split('__');
 
-  if (action === 'vote') {
-    const network = networks.find((network) => network.chainId === chainId);
-    if (!network) {
-      await bot.sendMessage(callbackQuery.message?.chat.id!, 'Network not found for chainId: ' + chainId);
-      return;
-    }
+  const inProgressMessage = await bot.sendMessage(
+    callbackQuery.message?.chat.id!,
+    `⏳ Voting <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.name} (${network.scope})</b>`,
+    {
+      reply_to_message_id: callbackQuery.message?.message_id,
+      parse_mode: 'HTML' as ParseMode,
+    },
+  );
 
-    const inProgressMessage = await bot.sendMessage(
-      callbackQuery.message?.chat.id!,
-      `⏳ Voting <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.name} (${network.scope})</b>`,
-      {
-        reply_to_message_id: callbackQuery.message?.message_id,
-        parse_mode: 'HTML' as ParseMode,
-      },
-    );
+  const cosmosSdkVersion = await getCosmosSdkVersion(network.endpoints.api);
+  const coinType = network.coinType ?? 118; // TODO: add support of coin type
 
-    const cosmosSdkVersion = await getCosmosSdkVersion(network.endpoints.api);
-    const coinType = network.coinType ?? 118; // TODO: add support of coin type
-    const result = await vote(
+  let result;
+  try {
+    result = await vote(
       network.validator.walletAddress,
       network.endpoints.rpc,
       network.prefix,
@@ -208,120 +200,59 @@ bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
       cosmosSdkVersion,
       coinType,
     );
-    if (result && result.code === 0) {
-      const opts = {
-        chat_id: callbackQuery.message?.chat.id!,
-        message_id: callbackQuery.message?.message_id,
-        reply_markup: {
-          ...getInlineKeyboardMarkup(chainId, Number(proposalId), option),
-        },
-        parse_mode: 'HTML' as ParseMode,
-        disable_web_page_preview: true,
-      };
+  } catch (e: any) {
+    console.error('Error voting:', e);
+    result = {
+      code: 1,
+      rawLog: e?.message,
+    } as DeliverTxResponse;
+  }
 
-      await bot.editMessageReplyMarkup(opts.reply_markup, opts);
-      await bot.deleteMessage(inProgressMessage.chat.id, inProgressMessage.message_id);
+  if (result && result.code === 0) {
+    const opts = {
+      chat_id: callbackQuery.message?.chat.id!,
+      message_id: callbackQuery.message?.message_id,
+      reply_markup: {
+        ...getInlineKeyboardMarkup(chainId, Number(proposalId), option),
+      },
+      parse_mode: 'HTML' as ParseMode,
+      disable_web_page_preview: true,
+    };
 
-      const txUrl = getUrlFromTemplate(network.explorer.txUrl, result.transactionHash);
-      const successMessage = dedent(
-        `🟩 Voted <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.name} (${network.scope})</b>
+    await bot.editMessageReplyMarkup(opts.reply_markup, opts);
+    await bot.deleteMessage(inProgressMessage.chat.id, inProgressMessage.message_id);
+
+    const txUrl = getUrlFromTemplate(network.explorer.txUrl, result.transactionHash);
+    const successMessage = dedent(
+      `🟩 Voted <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.name} (${network.scope})</b>
         TX hash: <a href="${txUrl}">${result.transactionHash}</a>`,
-      );
-      await bot.sendMessage(callbackQuery.message?.chat.id!, successMessage, {
-        reply_to_message_id: callbackQuery.message?.message_id,
-        parse_mode: 'HTML' as ParseMode,
-        disable_web_page_preview: true,
-      });
-    } else {
-      await bot.deleteMessage(inProgressMessage.chat.id, inProgressMessage.message_id);
-      const errorMessage = dedent(
-        `🟥 Error voting for proposal <b>#${proposalId}</b> in <b>${network.name}:</b>
-        ${result.rawLog}`,
-      );
-      await bot.sendMessage(callbackQuery.message?.chat.id!, errorMessage, {
-        reply_to_message_id: callbackQuery.message?.message_id,
-        parse_mode: 'HTML' as ParseMode,
-      });
-    }
-  }
-});
-
-// Handler for utility commands
-bot.setMyCommands([
-  { command: '/networks', description: 'Show list of supported networks' },
-  { command: '/active_proposals', description: 'show active proposals' },
-]);
-
-const getNetworkDetails = async (network: Network) => {
-  const [sdkVersion, voterAddress] = await Promise.all([
-    getCosmosSdkVersion(network.endpoints.api),
-    getWalletAddress(MNEMONIC, network.prefix, network.coinType ?? 118),
-  ]);
-  const accountUrl = getUrlFromTemplate(network.explorer.accountUrl, voterAddress);
-
-  return dedent(`
-        🌐 <b>${network.prettyName}</>
-        SDK Version: ${sdkVersion}
-        Voter Address: <a href="${accountUrl}">${voterAddress}</a>
-    `);
-};
-
-bot.onText(/\/networks/, async (msg: TelegramBot.Message) => {
-  const details = await Promise.all(networks.map(getNetworkDetails));
-  const detailsMessage = details.join('\n\n');
-
-  let message = `Supported networks:\n\n`;
-  if (details.length > 0) {
-    message += `🟩 Scope: <b>MAINNET</b>\n\n${detailsMessage}`;
-  } else {
-    message += `No networks found. Please check config`;
-  }
-
-  await bot.sendMessage(msg.chat.id, message, {
-    parse_mode: 'HTML' as ParseMode,
-    disable_web_page_preview: true,
-  });
-});
-
-bot.onText(/\/active_proposals/, async (msg: TelegramBot.Message) => {
-  let thereAreActiveProposals = false;
-
-  for (const network of networks) {
-    const proposals = await getActiveProposals(network.endpoints.api);
-    const activeProposals = proposals.filter(
-      (proposal: any) => getProposalStatus(proposal) === 'PROPOSAL_STATUS_VOTING_PERIOD',
     );
-
-    if (activeProposals.length > 0) {
-      thereAreActiveProposals = true;
-      await bot.sendMessage(msg.chat.id, `List of active proposals in <b>${network.name}:</b>`, {
-        parse_mode: 'HTML' as ParseMode,
-      });
-      for (const proposal of activeProposals) {
-        await sendProposalMessage(network, proposal);
-      }
-    }
+    await bot.sendMessage(callbackQuery.message?.chat.id!, successMessage, {
+      reply_to_message_id: callbackQuery.message?.message_id,
+      parse_mode: 'HTML' as ParseMode,
+      disable_web_page_preview: true,
+    });
+  } else {
+    await bot.deleteMessage(inProgressMessage.chat.id, inProgressMessage.message_id);
+    const errorMessage = dedent(
+      `🟥 Error voting for proposal <b>#${proposalId}</b> in <b>${network.name}:</b>
+        ${result?.rawLog}`,
+    );
+    await bot.sendMessage(callbackQuery.message?.chat.id!, errorMessage, {
+      reply_to_message_id: callbackQuery.message?.message_id,
+      parse_mode: 'HTML' as ParseMode,
+    });
   }
-
-  if (!thereAreActiveProposals) {
-    await bot.sendMessage(msg.chat.id, 'There are no active proposals in any network.');
-  }
-});
+}
 
 async function fetchNewActiveProposals() {
   console.log('Fetching active proposals from networks...');
   networks = await getNetworks();
 
-  networks = networks.filter((network) => network.endpoints?.api).filter((network) => network.scope === SCOPE);
   console.log('Networks:', networks.map((network) => `${network.name}(${network.scope})`).join(', '));
 
   for (const network of networks) {
     console.log(`Fetching proposals for ${network.name} (${network.scope}). ChainID: ${network.chainId} ...`);
-    if (!network.endpoints?.api) {
-      console.error(`Error: API endpoint not found for network ${network.name} (${network.scope})`);
-      continue;
-    }
-
     const chainId = network.chainId;
     const proposals = await getActiveProposals(network.endpoints.api);
     for (const proposal of proposals) {
@@ -338,8 +269,12 @@ async function fetchNewActiveProposals() {
 
 connectDb().then(async () => {
   console.log('Bot is running...');
-  await fetchNewActiveProposals();
+
   setInterval(async () => {
     await fetchNewActiveProposals();
   }, FETCH_INTERVAL_MS);
+
+  registerCommandHandlers(bot);
 });
+
+export { bot, handleVoteCommand, sendProposalMessage };

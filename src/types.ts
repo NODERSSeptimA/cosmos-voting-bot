@@ -2,8 +2,10 @@ interface Network {
   name: string;
   prettyName: string;
   scope: string;
+  daemonName: string;
   prefix: string;
   denom: string;
+  fees: string;
   gasPrice: string;
   chainId: string;
   coinType?: number;
