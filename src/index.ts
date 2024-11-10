@@ -1,6 +1,6 @@
 import TelegramBot, { ParseMode } from 'node-telegram-bot-api';
-import { DeliverTxResponse, GasPrice, makeCosmoshubPath, SigningStargateClient } from '@cosmjs/stargate';
-import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing';
+import { DeliverTxResponse, SigningStargateClient } from '@cosmjs/stargate';
+import { DirectSecp256k1HdWallet, parseCoins, Registry } from '@cosmjs/proto-signing';
 import dedent from 'dedent';
 import 'dotenv/config';
 import { Network } from './types';
@@ -18,6 +18,10 @@ import { checkProposalExists, connectDb, saveProposal } from './database';
 import { getNetworks } from './api/registryApi';
 import { registerCommandHandlers } from './commandHandler';
 
+import { MsgVote } from 'cosmjs-types/cosmos/gov/v1/tx';
+import { MsgExec } from 'cosmjs-types/cosmos/authz/v1beta1/tx';
+import { VoteOption } from 'cosmjs-types/cosmos/gov/v1beta1/gov';
+
 const MNEMONIC = process.env.MNEMONIC!;
 const FETCH_INTERVAL_MS = parseInt(process.env.FETCH_INTERVAL_MS || '60000');
 
@@ -26,7 +30,9 @@ const BOT_TOKEN = process.env.BOT_TOKEN!;
 const CHAT_ID = process.env.CHAT_ID!;
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-let networks: Network[] = [];
+const registry = new Registry();
+registry.register('/cosmos.authz.v1beta1.MsgExec', MsgExec);
+registry.register('/cosmos.gov.v1.MsgVote', MsgVote);
 
 enum VoteOptions {
   VOTE_OPTION_YES = 'VOTE_OPTION_YES',
@@ -89,17 +95,15 @@ async function vote(
   validatorWalletAddress: string,
   rpcEndpoint: string,
   prefix: string,
-  gasPriceString: string,
   proposalId: number,
   option: string,
   cosmosSdkVersion: string,
   coinType: number,
+  fees: string,
 ) {
-  const hdPath = makeCosmoshubPath(coinType);
   const wallet = await DirectSecp256k1HdWallet.fromMnemonic(MNEMONIC, { prefix });
   const [account] = await wallet.getAccounts();
-  const gasPrice = GasPrice.fromString(gasPriceString);
-  const client = await SigningStargateClient.connectWithSigner(rpcEndpoint, wallet, { gasPrice });
+  const client = await SigningStargateClient.connectWithSigner(rpcEndpoint, wallet);
 
   console.log(
     `Voting for proposal #${proposalId} with option "${option}" from account ${account.address} using rpc: ${rpcEndpoint}`,
@@ -108,27 +112,29 @@ async function vote(
   let voteOption;
   switch (option) {
     case VoteOptions.VOTE_OPTION_YES:
-      voteOption = 1;
+      voteOption = VoteOption.VOTE_OPTION_YES;
       break;
     case VoteOptions.VOTE_OPTION_ABSTAIN:
-      voteOption = 2;
+      voteOption = VoteOption.VOTE_OPTION_ABSTAIN;
       break;
     case VoteOptions.VOTE_OPTION_NO:
-      voteOption = 3;
+      voteOption = VoteOption.VOTE_OPTION_NO;
       break;
     case VoteOptions.VOTE_OPTION_NO_WITH_VETO:
-      voteOption = 4;
+      voteOption = VoteOption.VOTE_OPTION_NO_WITH_VETO;
       break;
   }
 
   const messageType = getVoteMessageType(cosmosSdkVersion);
   const voteMsg = {
     typeUrl: messageType,
-    value: {
-      proposalId: proposalId,
-      voter: validatorWalletAddress,
-      option: voteOption,
-    },
+    value: MsgVote.encode(
+      MsgVote.fromPartial({
+        proposalId: proposalId as any,
+        voter: validatorWalletAddress,
+        option: voteOption,
+      }),
+    ).finish(),
   };
 
   const execMsg = {
@@ -139,10 +145,13 @@ async function vote(
     },
   };
 
-  console.log('EXEC MESSAGE: ', JSON.stringify(execMsg));
-
+  const gasEstimation = await client.simulate(account.address, [execMsg], undefined);
+  const adjustedGas = Math.floor(gasEstimation * 2);
   try {
-    const result = await client.signAndBroadcast(account.address, [execMsg], 'auto');
+    const result = await client.signAndBroadcast(account.address, [execMsg], {
+      amount: parseCoins(fees),
+      gas: adjustedGas.toString(),
+    });
     console.log('Transaction result:', result.rawLog);
     return result;
   } catch (error: any) {
@@ -216,11 +225,11 @@ async function handleVoteCommand(callbackQuery: TelegramBot.CallbackQuery, netwo
       network.validator.walletAddress,
       network.endpoints.rpc,
       network.prefix,
-      network.gasPrice,
       Number(proposalId),
       option,
       cosmosSdkVersion,
       coinType,
+      network.fees,
     );
   } catch (e: any) {
     console.error('Error voting:', e);
@@ -269,7 +278,7 @@ async function handleVoteCommand(callbackQuery: TelegramBot.CallbackQuery, netwo
 
 async function fetchNewActiveProposals() {
   console.log('Fetching active proposals from networks...');
-  networks = await getNetworks();
+  const networks = await getNetworks();
 
   console.log('Networks:', networks.map((network) => `${network.name}(${network.scope})`).join(', '));
 
