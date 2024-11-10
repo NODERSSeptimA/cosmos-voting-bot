@@ -28,38 +28,57 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 let networks: Network[] = [];
 
+enum VoteOptions {
+  VOTE_OPTION_YES = 'VOTE_OPTION_YES',
+  VOTE_OPTION_NO = 'VOTE_OPTION_NO',
+  VOTE_OPTION_NO_WITH_VETO = 'VOTE_OPTION_NO_WITH_VETO',
+  VOTE_OPTION_ABSTAIN = 'VOTE_OPTION_ABSTAIN',
+}
+
 enum VoteButtons {
-  YES = '👍 Yes',
-  NO = '👎 No',
-  NO_WITH_VETO = '❌ No with Veto',
-  ABSTAIN = '🤷‍♂️ Abstain',
+  VOTE_OPTION_YES = '👍 Yes',
+  VOTE_OPTION_NO = '👎 No',
+  VOTE_OPTION_NO_WITH_VETO = '❌ No with Veto',
+  VOTE_OPTION_ABSTAIN = '🤷‍♂️ Abstain',
 }
 
 function getInlineKeyboardMarkup(
   chainId: string,
   proposalId: number,
-  option: string | undefined,
+  option: string,
 ): TelegramBot.InlineKeyboardMarkup {
   return {
     inline_keyboard: [
       [
         {
-          text: option === 'yes' ? `✅ VOTED: ${VoteButtons.YES}` : VoteButtons.YES,
-          callback_data: `vote__${chainId}__yes__${proposalId}`,
+          text:
+            option === VoteOptions.VOTE_OPTION_YES
+              ? `✅ VOTED: ${VoteButtons.VOTE_OPTION_YES}`
+              : VoteButtons.VOTE_OPTION_YES,
+          callback_data: `vote__${chainId}__${VoteOptions.VOTE_OPTION_YES}__${proposalId}`,
         },
         {
-          text: option === 'no' ? `✅ VOTED: ${VoteButtons.NO}` : VoteButtons.NO,
-          callback_data: `vote__${chainId}__no__${proposalId}`,
+          text:
+            option === VoteOptions.VOTE_OPTION_NO
+              ? `✅ VOTED: ${VoteButtons.VOTE_OPTION_NO}`
+              : VoteButtons.VOTE_OPTION_NO,
+          callback_data: `vote__${chainId}__${VoteOptions.VOTE_OPTION_NO}__${proposalId}`,
         },
       ],
       [
         {
-          text: option === 'veto' ? `✅ VOTED: ${VoteButtons.NO_WITH_VETO}` : VoteButtons.NO_WITH_VETO,
-          callback_data: `vote__${chainId}__veto__${proposalId}`,
+          text:
+            option === VoteOptions.VOTE_OPTION_NO_WITH_VETO
+              ? `✅ VOTED: ${VoteButtons.VOTE_OPTION_NO_WITH_VETO}`
+              : VoteButtons.VOTE_OPTION_NO_WITH_VETO,
+          callback_data: `vote__${chainId}__${VoteOptions.VOTE_OPTION_NO_WITH_VETO}__${proposalId}`,
         },
         {
-          text: option === 'abstain' ? `✅ VOTED: ${VoteButtons.ABSTAIN}` : VoteButtons.ABSTAIN,
-          callback_data: `vote__${chainId}__abstain__${proposalId}`,
+          text:
+            option === VoteOptions.VOTE_OPTION_ABSTAIN
+              ? `✅ VOTED: ${VoteButtons.VOTE_OPTION_ABSTAIN}`
+              : VoteButtons.VOTE_OPTION_ABSTAIN,
+          callback_data: `vote__${chainId}__${VoteOptions.VOTE_OPTION_ABSTAIN}__${proposalId}`,
         },
       ],
     ],
@@ -88,17 +107,17 @@ async function vote(
 
   let voteOption;
   switch (option) {
-    case 'yes':
+    case VoteOptions.VOTE_OPTION_YES:
       voteOption = 1;
       break;
-    case 'no':
+    case VoteOptions.VOTE_OPTION_ABSTAIN:
+      voteOption = 2;
+      break;
+    case VoteOptions.VOTE_OPTION_NO:
       voteOption = 3;
       break;
-    case 'veto':
+    case VoteOptions.VOTE_OPTION_NO_WITH_VETO:
       voteOption = 4;
-      break;
-    case 'abstain':
-      voteOption = 2;
       break;
   }
 
@@ -119,6 +138,8 @@ async function vote(
       msgs: [voteMsg],
     },
   };
+
+  console.log('EXEC MESSAGE: ', JSON.stringify(execMsg));
 
   try {
     const result = await client.signAndBroadcast(account.address, [execMsg], 'auto');
@@ -149,6 +170,7 @@ async function sendProposalMessage(network: Network, proposal: any) {
     🗳 <b>Type:</b> ${proposalType}
     📃 <b>Title:</b> <a href="${proposalUrl}">${proposalTitle}</a>
     🕓 <b>Voting ends:</b> ${votingEndsTime}
+    🗳 <b>Your vote:</b> ${option}    
   `);
 
   if (isUpgradeProposal(proposal)) {
