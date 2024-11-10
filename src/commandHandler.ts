@@ -7,6 +7,7 @@ import dedent from 'dedent';
 import { Network } from './types';
 import { getNetworks } from './api/registryApi';
 
+const SCOPE = process.env.SCOPE || 'mainnet';
 const MNEMONIC = process.env.MNEMONIC!;
 
 const getNetworkDetails = async (network: Network) => {
@@ -15,11 +16,14 @@ const getNetworkDetails = async (network: Network) => {
     getWalletAddress(MNEMONIC, network.prefix, network.coinType ?? 118),
   ]);
   const accountUrl = getUrlFromTemplate(network.explorer.accountUrl, voterAddress);
+  const validatorUrl = getUrlFromTemplate(network.explorer.validatorUrl, network.validator.validatorAddress);
 
   return dedent(`
-        🌐 <b>${network.prettyName}</>
-        SDK Version: ${sdkVersion}
-        Voter Address: <a href="${accountUrl}">${voterAddress}</a>
+        🌐 <b>${network.prettyName}</b>
+        <b>Chain ID:</b> ${network.chainId}
+        <b>SDK Version:</b> ${sdkVersion}
+        <b>Valoper Address:</b> <a href="${validatorUrl}">${network.validator.validatorAddress}</a>
+        <b>Voter Address:</b> <a href="${accountUrl}">${voterAddress}</a>
     `);
 };
 
@@ -27,24 +31,38 @@ export function registerCommandHandlers(bot: TelegramBot) {
   bot.setMyCommands([
     { command: '/networks', description: 'Show list of supported networks' },
     { command: '/active_proposals', description: 'Show active proposals' },
-    { command: '/grant_permission', description: 'Show grant permission command' },
   ]);
 
   bot.onText(/\/networks/, async (msg: TelegramBot.Message) => {
     const networks = await getNetworks();
-    const details = await Promise.all(networks.map(getNetworkDetails));
-    const detailsMessage = details.join('\n\n');
+    const buttons: TelegramBot.InlineKeyboardButton[][] = [];
+    let row: TelegramBot.InlineKeyboardButton[] = [];
 
-    let message = `Supported networks:\n\n`;
-    if (details.length > 0) {
-      message += `🟩 Scope: <b>MAINNET</b>\n\n${detailsMessage}`;
-    } else {
-      message += `No networks found. Please check config`;
+    for (const network of networks) {
+      row.push({
+        text: network.prettyName,
+        callback_data: `show_network_details__${network.chainId}`,
+      });
+      if (row.length === 3) {
+        buttons.push(row);
+        row = [];
+      }
     }
 
+    if (row.length > 0) {
+      buttons.push(row);
+    }
+
+    const message = dedent`
+      🟩 Scope: <b>${SCOPE}</b>
+      Supported networks:
+    `;
+
     await bot.sendMessage(msg.chat.id, message, {
-      parse_mode: 'HTML' as ParseMode,
-      disable_web_page_preview: true,
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: buttons,
+      },
     });
   });
 
@@ -74,44 +92,26 @@ export function registerCommandHandlers(bot: TelegramBot) {
     }
   });
 
-  bot.onText(/\/grant_permission/, async (msg: TelegramBot.Message) => {
-    const networks = await getNetworks();
-    const buttons: TelegramBot.InlineKeyboardButton[][] = [];
-    let row: TelegramBot.InlineKeyboardButton[] = [];
-
-    for (const network of networks) {
-      row.push({
-        text: network.prettyName,
-        callback_data: `show_grant_command__${network.chainId}`,
-      });
-      if (row.length === 3) {
-        buttons.push(row);
-        row = [];
-      }
-    }
-
-    if (row.length > 0) {
-      buttons.push(row);
-    }
-
-    await bot.sendMessage(msg.chat.id, 'Choose network:', {
-      reply_markup: {
-        inline_keyboard: buttons,
-      },
-    });
-  });
-
-  async function handleShowGrantPermissionCommand(chatId: number, network: Network) {
+  async function handleShowNetworkDetails(chatId: number, network: Network) {
     const cosmosSdkVersion = await getCosmosSdkVersion(network.endpoints.api);
     const voterAddress = await getWalletAddress(MNEMONIC, network.prefix, network.coinType ?? 118);
     const voteMessageType = getVoteMessageType(cosmosSdkVersion);
-    const title = escapeMarkdownV2(`Grant permission to vote for proposals in ${network.prettyName}:`);
-    const command = dedent`
-     ${title}
-      \`\`\`\n${network.daemonName} tx authz grant ${voterAddress} generic \-\-msg-type=${voteMessageType} \-\-from ${network.validator.walletAddress} \-\-fees ${network.fees} \-y\`\`\`
-    `;
 
-    await bot.sendMessage(chatId, command, { parse_mode: 'MarkdownV2' });
+    const networkDetails = await getNetworkDetails(network);
+    await bot.sendMessage(chatId, networkDetails, {
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+    });
+
+    const grantCommand = dedent`
+      ${escapeMarkdownV2(`Grant permission to vote for proposals in ${network.prettyName}:`)}
+      \`\`\`\n
+      ${network.daemonName} tx authz grant ${voterAddress} generic \-\-msg-type=${voteMessageType} \-\-from ${
+      network.validator.walletAddress
+    } \-\-fees ${network.fees} \-y
+       \`\`\`
+    `;
+    await bot.sendMessage(chatId, grantCommand, { parse_mode: 'MarkdownV2' });
   }
 
   bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
@@ -125,8 +125,8 @@ export function registerCommandHandlers(bot: TelegramBot) {
     }
 
     switch (action) {
-      case 'show_grant_command':
-        await handleShowGrantPermissionCommand(callbackQuery.message!.chat.id, network);
+      case 'show_network_details':
+        await handleShowNetworkDetails(callbackQuery.message!.chat.id, network);
         break;
       case 'vote':
         await handleVoteCommand(callbackQuery, network);

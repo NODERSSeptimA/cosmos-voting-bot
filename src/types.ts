@@ -21,6 +21,7 @@ interface Network {
     accountUrl: string;
     blockUrl: string;
     txUrl: string;
+    validatorUrl: string;
     proposalUrl: string;
   };
 }
