@@ -29,4 +29,8 @@ function isCosmosSdkNewerOrEqual(a: string, b: string): boolean {
   return versionA.patch >= versionB.patch;
 }
 
-export { getUrlFromTemplate, getVoteMessageType };
+function escapeMarkdownV2(text: string): string {
+  return text.replace(/([_*[\]()~`>#+\-=|{}.!])/g, '\\$1');
+}
+
+export { getUrlFromTemplate, getVoteMessageType, escapeMarkdownV2 };

@@ -2,7 +2,7 @@ import { handleVoteCommand, sendProposalMessage } from './index';
 import TelegramBot, { ParseMode } from 'node-telegram-bot-api';
 import { getActiveProposals, getCosmosSdkVersion, getWalletAddress } from './api/cosmosApi';
 import { getProposalStatus } from './proposalUtils';
-import { getUrlFromTemplate, getVoteMessageType } from './utils';
+import { escapeMarkdownV2, getUrlFromTemplate, getVoteMessageType } from './utils';
 import dedent from 'dedent';
 import { Network } from './types';
 import { getNetworks } from './api/registryApi';
@@ -105,9 +105,10 @@ export function registerCommandHandlers(bot: TelegramBot) {
     const cosmosSdkVersion = await getCosmosSdkVersion(network.endpoints.api);
     const voterAddress = await getWalletAddress(MNEMONIC, network.prefix, network.coinType ?? 118);
     const voteMessageType = getVoteMessageType(cosmosSdkVersion);
+    const title = escapeMarkdownV2(`Grant permission to vote for proposals in ${network.prettyName}:`);
     const command = dedent`
-      Grant permission to vote for proposals in *${network.prettyName}*:
-      \`\`\`\n${network.daemonName} tx authz grant ${voterAddress} generic \-\-msg-type=${voteMessageType} \-\-from ${network.validator.validatorAddress} \-\-fees ${network.fees} \-y grant_permission\`\`\`
+     ${title}
+      \`\`\`\n${network.daemonName} tx authz grant ${voterAddress} generic \-\-msg-type=${voteMessageType} \-\-from ${network.validator.walletAddress} \-\-fees ${network.fees} \-y\`\`\`
     `;
 
     await bot.sendMessage(chatId, command, { parse_mode: 'MarkdownV2' });

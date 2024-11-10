@@ -143,7 +143,7 @@ async function sendProposalMessage(network: Network, proposal: any) {
   const votingEndsTime = getVotingEndTime(proposal);
 
   let message = dedent(`
-    🌐 <b>Network:</b> ${network.name}
+    🌐 <b>Network:</b> ${network.prettyName}
     ⚖️ <b>Scope:</b> ${network.scope}
     📜 <b>Proposal ID:</b> <a href="${proposalUrl}">${proposalId}</a>
     🗳 <b>Type:</b> ${proposalType}
