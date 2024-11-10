@@ -78,7 +78,7 @@ export function registerCommandHandlers(bot: TelegramBot) {
 
       if (activeProposals.length > 0) {
         thereAreActiveProposals = true;
-        await bot.sendMessage(msg.chat.id, `List of active proposals in <b>${network.name}:</b>`, {
+        await bot.sendMessage(msg.chat.id, `List of active proposals in <b>${network.prettyName}:</b>`, {
           parse_mode: 'HTML' as ParseMode,
         });
         for (const proposal of activeProposals) {
