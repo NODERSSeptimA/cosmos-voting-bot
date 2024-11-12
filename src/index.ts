@@ -34,51 +34,48 @@ const registry = new Registry();
 registry.register('/cosmos.authz.v1beta1.MsgExec', MsgExec);
 registry.register('/cosmos.gov.v1.MsgVote', MsgVote);
 
-enum VoteButtons {
-  VOTE_OPTION_YES = '👍 Yes',
-  VOTE_OPTION_NO = '👎 No',
-  VOTE_OPTION_NO_WITH_VETO = '❌ No with Veto',
-  VOTE_OPTION_ABSTAIN = '🤷‍♂️ Abstain',
+function getVoteOptionText(voteOption: VoteOption): string {
+  switch (voteOption) {
+    case VoteOption.VOTE_OPTION_YES:
+      return '👍 Yes';
+    case VoteOption.VOTE_OPTION_NO:
+      return '👎 No';
+    case VoteOption.VOTE_OPTION_NO_WITH_VETO:
+      return '❌ No with Veto';
+    case VoteOption.VOTE_OPTION_ABSTAIN:
+      return '🤷‍♂️ Abstain';
+    default:
+      return '🧻 Unknown';
+  }
+}
+
+function createVoteButton(
+  chainId: string,
+  proposalId: number,
+  voteOption: VoteOption,
+  selectedOption: VoteOption,
+): TelegramBot.InlineKeyboardButton {
+  const isSelected = voteOption === selectedOption;
+  return {
+    text: isSelected ? `✅ VOTED: ${getVoteOptionText(voteOption)}` : getVoteOptionText(voteOption),
+    callback_data: `vote__${chainId}__${voteOption}__${proposalId}`,
+  };
 }
 
 function getInlineKeyboardMarkup(
   chainId: string,
   proposalId: number,
-  option: VoteOption,
+  selectedOption: VoteOption,
 ): TelegramBot.InlineKeyboardMarkup {
   return {
     inline_keyboard: [
       [
-        {
-          text:
-            option === VoteOption.VOTE_OPTION_YES
-              ? `✅ VOTED: ${VoteButtons.VOTE_OPTION_YES}`
-              : VoteButtons.VOTE_OPTION_YES,
-          callback_data: `vote__${chainId}__${VoteOption.VOTE_OPTION_YES}__${proposalId}`,
-        },
-        {
-          text:
-            option === VoteOption.VOTE_OPTION_NO
-              ? `✅ VOTED: ${VoteButtons.VOTE_OPTION_NO}`
-              : VoteButtons.VOTE_OPTION_NO,
-          callback_data: `vote__${chainId}__${VoteOption.VOTE_OPTION_NO}__${proposalId}`,
-        },
+        createVoteButton(chainId, proposalId, VoteOption.VOTE_OPTION_YES, selectedOption),
+        createVoteButton(chainId, proposalId, VoteOption.VOTE_OPTION_NO, selectedOption),
       ],
       [
-        {
-          text:
-            option === VoteOption.VOTE_OPTION_NO_WITH_VETO
-              ? `✅ VOTED: ${VoteButtons.VOTE_OPTION_NO_WITH_VETO}`
-              : VoteButtons.VOTE_OPTION_NO_WITH_VETO,
-          callback_data: `vote__${chainId}__${VoteOption.VOTE_OPTION_NO_WITH_VETO}__${proposalId}`,
-        },
-        {
-          text:
-            option === VoteOption.VOTE_OPTION_ABSTAIN
-              ? `✅ VOTED: ${VoteButtons.VOTE_OPTION_ABSTAIN}`
-              : VoteButtons.VOTE_OPTION_ABSTAIN,
-          callback_data: `vote__${chainId}__${VoteOption.VOTE_OPTION_ABSTAIN}__${proposalId}`,
-        },
+        createVoteButton(chainId, proposalId, VoteOption.VOTE_OPTION_NO_WITH_VETO, selectedOption),
+        createVoteButton(chainId, proposalId, VoteOption.VOTE_OPTION_ABSTAIN, selectedOption),
       ],
     ],
   };
@@ -99,7 +96,9 @@ async function vote(
   const client = await SigningStargateClient.connectWithSigner(rpcEndpoint, wallet);
 
   console.log(
-    `Voting for proposal #${proposalId} with option "${voteOption}" from account ${account.address} using rpc: ${rpcEndpoint}`,
+    `Voting for proposal #${proposalId} with option "${getVoteOptionText(voteOption)}" from account ${
+      account.address
+    } using rpc: ${rpcEndpoint}`,
   );
 
   const messageType = getVoteMessageType(cosmosSdkVersion);
@@ -156,7 +155,7 @@ async function sendProposalMessage(network: Network, proposal: any) {
     🗳 <b>Type:</b> ${proposalType}
     📃 <b>Title:</b> <a href="${proposalUrl}">${proposalTitle}</a>
     🕓 <b>Voting ends:</b> ${votingEndsTime}
-    🗳 <b>Your vote:</b> ${voteOption}    
+    🗳 <b>Your vote:</b> ${getVoteOptionText(voteOption)}    
   `);
 
   if (isUpgradeProposal(proposal)) {
