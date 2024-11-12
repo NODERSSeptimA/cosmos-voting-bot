@@ -1,6 +1,6 @@
 import { handleVoteCommand, sendProposalMessage } from './index';
 import TelegramBot, { ParseMode } from 'node-telegram-bot-api';
-import { getActiveProposals, getCosmosSdkVersion, getWalletAddress } from './api/cosmosApi';
+import { getActiveProposals, getCosmosSdkVersion, getVotePermissionGrant, getWalletAddress } from './api/cosmosApi';
 import { getProposalStatus } from './proposalUtils';
 import { escapeMarkdownV2, getUrlFromTemplate, getVoteMessageType } from './utils';
 import dedent from 'dedent';
@@ -15,6 +15,13 @@ const getNetworkDetails = async (network: Network) => {
     getCosmosSdkVersion(network.endpoints.api),
     getWalletAddress(MNEMONIC, network.prefix, network.coinType ?? 118),
   ]);
+  const voteMessageType = getVoteMessageType(sdkVersion);
+  const votePermissionGrant = await getVotePermissionGrant(
+    network.endpoints.api,
+    network.validator.walletAddress,
+    voterAddress,
+    voteMessageType,
+  );
   const accountUrl = getUrlFromTemplate(network.explorer.accountUrl, voterAddress);
   const validatorUrl = getUrlFromTemplate(network.explorer.validatorUrl, network.validator.validatorAddress);
 
@@ -24,6 +31,7 @@ const getNetworkDetails = async (network: Network) => {
         <b>SDK Version:</b> ${sdkVersion}
         <b>Valoper Address:</b> <a href="${validatorUrl}">${network.validator.validatorAddress}</a>
         <b>Voter Address:</b> <a href="${accountUrl}">${voterAddress}</a>
+        <b>Vote Permission:</b> ${votePermissionGrant.length > 0 ? '🟢 Granted' : '🔴 Not granted'}
     `);
 };
 
@@ -103,13 +111,22 @@ export function registerCommandHandlers(bot: TelegramBot) {
       disable_web_page_preview: true,
     });
 
+    const daemon = network.daemonName;
+    const validatorWallet = network.validator.walletAddress;
     const grantCommand = dedent`
       ${escapeMarkdownV2(`Grant permission to vote for proposals in ${network.prettyName}:`)}
       \`\`\`\n
-      ${network.daemonName} tx authz grant ${voterAddress} generic \-\-msg-type=${voteMessageType} \-\-from ${
-      network.validator.walletAddress
-    } \-\-fees ${network.fees} \-y
-       \`\`\`
+      ${daemon} tx authz grant ${voterAddress} generic \-\-msg-type=${voteMessageType} \-\-from ${validatorWallet} \-\-fees ${
+      network.fees
+    } \-y
+      \`\`\`
+       
+      Send 1 token to voter address to pay for the fee:
+      \`\`\`\n
+      ${daemon} tx bank send ${validatorWallet} ${voterAddress} 1000000${
+      network.denom
+    } \-\-from ${validatorWallet} \-\-fees ${network.fees} \-y
+      \`\`\`
     `;
     await bot.sendMessage(chatId, grantCommand, { parse_mode: 'MarkdownV2' });
   }

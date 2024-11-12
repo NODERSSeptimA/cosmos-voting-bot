@@ -67,4 +67,31 @@ async function getVoteOptionForProposal(
   return 'Unknown';
 }
 
-export { getActiveProposals, getCosmosSdkVersion, getWalletAddress, getVoteOptionForProposal };
+async function getVotePermissionGrant(
+  apiEndpoint: string,
+  validatorWalletAddress: string,
+  voterAddress: string,
+  voteMessageType: string,
+): Promise<any[]> {
+  let errorMessage;
+  try {
+    const response = await axios.get(`${apiEndpoint}/cosmos/authz/v1beta1/grants`, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      params: {
+        granter: validatorWalletAddress,
+        grantee: voterAddress,
+        msg_type_url: voteMessageType,
+      },
+    });
+    return response.data.grants;
+  } catch (error: AxiosError | any) {
+    errorMessage = error.message;
+  }
+
+  console.error(`Error fetching vote permission for ${voterAddress} from ${apiEndpoint}:`, errorMessage);
+  return [];
+}
+
+export { getActiveProposals, getCosmosSdkVersion, getWalletAddress, getVoteOptionForProposal, getVotePermissionGrant };
