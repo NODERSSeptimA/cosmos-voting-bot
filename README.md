@@ -27,21 +27,19 @@ are detected.
 
 ## Configuration
 
-1. Copy the `networks.json.example` file to `networks.json`:
-    ```sh
-    cp networks.json.example networks.json
-    ```
+Create a `.env` file in the root directory and add the following environment variables:
+ ```env
+MNEMONIC=your_wallet_mnemonic_here
+SCCOPE=mainnet
 
-2. Edit the `networks.json` file to include the blockchain networks you want to monitor.
+# fetch interval (optional). Default is 60000 ms (1 minute)
+FETCH_INTERVAL_MS=60000
 
-3. Create a `.env` file in the root directory and add the following environment variables:
-    ```env
-   MNEMONIC=your_wallet_mnemonic_here
-   
-   # fetch interval (optional). Default is 60000 ms (1 minute)
-   FETCH_INTERVAL_MS=60000
-   
-   # bot
-   BOT_TOKEN=your_telegram_bot_token_here
-   CHAT_ID=your_telegram_chat_id_here
-   ```
+# bot
+BOT_TOKEN=your_telegram_bot_token_here
+CHAT_ID=your_telegram_chat_id_here
+
+# registry
+REGISTRY_API_URL=https://registry.noders.services
+REGISTRY_API_TOKEN=xxxxx
+```
