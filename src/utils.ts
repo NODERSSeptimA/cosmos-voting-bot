@@ -2,12 +2,6 @@ function getUrlFromTemplate(template: string, item: string): string {
   return template ? template.replace('{item}', item) : item;
 }
 
-function getVoteMessageType(cosmosSdkVersion: string): string {
-  return isCosmosSdkNewerOrEqual(cosmosSdkVersion, 'v0.47.0')
-    ? '/cosmos.gov.v1.MsgVote'
-    : '/cosmos.gov.v1beta1.MsgVote';
-}
-
 function isCosmosSdkNewerOrEqual(a: string, b: string): boolean {
   const parseVersion = (version: string) => {
     const [main] = version.replace(/^v/, '').split('-');
@@ -33,4 +27,4 @@ function escapeMarkdownV2(text: string): string {
   return text.replace(/([_*[\]()~`>#+\-=|{}.!])/g, '\\$1');
 }
 
-export { getUrlFromTemplate, getVoteMessageType, escapeMarkdownV2 };
+export { getUrlFromTemplate, isCosmosSdkNewerOrEqual, escapeMarkdownV2 };

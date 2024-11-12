@@ -1,257 +1,22 @@
-import TelegramBot, { ParseMode } from 'node-telegram-bot-api';
-import { DeliverTxResponse, SigningStargateClient } from '@cosmjs/stargate';
-import { DirectSecp256k1HdWallet, parseCoins, Registry } from '@cosmjs/proto-signing';
-import dedent from 'dedent';
+import TelegramBot from 'node-telegram-bot-api';
+import { Registry } from '@cosmjs/proto-signing';
 import 'dotenv/config';
-import { Network } from './types';
-import {
-  getProposalId,
-  getProposalTitle,
-  getProposalType,
-  getUpgradeInfo,
-  getVotingEndTime,
-  isUpgradeProposal,
-} from './proposalUtils';
-import { getUrlFromTemplate, getVoteMessageType } from './utils';
-import { getActiveProposals, getCosmosSdkVersion, getVoteOptionForProposal } from './api/cosmosApi';
+import { getProposalId } from './proposalUtils';
+import { getActiveProposals } from './api/cosmosApi';
 import { checkProposalExists, connectDb, saveProposal } from './database';
 import { getNetworks } from './api/registryApi';
-import { registerCommandHandlers } from './commandHandler';
+import { registerCommandHandlers, sendProposalMessage } from './commandHandler';
 
 import { MsgVote } from 'cosmjs-types/cosmos/gov/v1/tx';
 import { MsgExec } from 'cosmjs-types/cosmos/authz/v1beta1/tx';
-import { VoteOption } from 'cosmjs-types/cosmos/gov/v1beta1/gov';
-
-const MNEMONIC = process.env.MNEMONIC!;
-const FETCH_INTERVAL_MS = parseInt(process.env.FETCH_INTERVAL_MS || '60000');
-
-// Telegram Bot configuration
-const BOT_TOKEN = process.env.BOT_TOKEN!;
-const CHAT_ID = process.env.CHAT_ID!;
-const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 const registry = new Registry();
 registry.register('/cosmos.authz.v1beta1.MsgExec', MsgExec);
 registry.register('/cosmos.gov.v1.MsgVote', MsgVote);
 
-function getVoteOptionText(voteOption: VoteOption): string {
-  switch (voteOption) {
-    case VoteOption.VOTE_OPTION_YES:
-      return '👍 Yes';
-    case VoteOption.VOTE_OPTION_NO:
-      return '👎 No';
-    case VoteOption.VOTE_OPTION_NO_WITH_VETO:
-      return '❌ No with Veto';
-    case VoteOption.VOTE_OPTION_ABSTAIN:
-      return '🤷‍♂️ Abstain';
-    default:
-      return '🧻 Unknown';
-  }
-}
-
-function createVoteButton(
-  chainId: string,
-  proposalId: number,
-  voteOption: VoteOption,
-  selectedOption: VoteOption,
-): TelegramBot.InlineKeyboardButton {
-  const isSelected = voteOption === selectedOption;
-  return {
-    text: isSelected ? `✅ VOTED: ${getVoteOptionText(voteOption)}` : getVoteOptionText(voteOption),
-    callback_data: `vote__${chainId}__${voteOption}__${proposalId}`,
-  };
-}
-
-function getInlineKeyboardMarkup(
-  chainId: string,
-  proposalId: number,
-  selectedOption: VoteOption,
-): TelegramBot.InlineKeyboardMarkup {
-  return {
-    inline_keyboard: [
-      [
-        createVoteButton(chainId, proposalId, VoteOption.VOTE_OPTION_YES, selectedOption),
-        createVoteButton(chainId, proposalId, VoteOption.VOTE_OPTION_NO, selectedOption),
-      ],
-      [
-        createVoteButton(chainId, proposalId, VoteOption.VOTE_OPTION_NO_WITH_VETO, selectedOption),
-        createVoteButton(chainId, proposalId, VoteOption.VOTE_OPTION_ABSTAIN, selectedOption),
-      ],
-    ],
-  };
-}
-
-async function vote(
-  validatorWalletAddress: string,
-  rpcEndpoint: string,
-  prefix: string,
-  proposalId: number,
-  voteOption: VoteOption,
-  cosmosSdkVersion: string,
-  coinType: number,
-  fees: string,
-) {
-  const wallet = await DirectSecp256k1HdWallet.fromMnemonic(MNEMONIC, { prefix });
-  const [account] = await wallet.getAccounts();
-  const client = await SigningStargateClient.connectWithSigner(rpcEndpoint, wallet);
-
-  console.log(
-    `Voting for proposal #${proposalId} with option "${getVoteOptionText(voteOption)}" from account ${
-      account.address
-    } using rpc: ${rpcEndpoint}`,
-  );
-
-  const messageType = getVoteMessageType(cosmosSdkVersion);
-  const voteMsg = {
-    typeUrl: messageType,
-    value: MsgVote.encode(
-      MsgVote.fromPartial({
-        proposalId: proposalId as any,
-        voter: validatorWalletAddress,
-        option: voteOption,
-      }),
-    ).finish(),
-  };
-
-  const execMsg = {
-    typeUrl: '/cosmos.authz.v1beta1.MsgExec',
-    value: {
-      grantee: account.address,
-      msgs: [voteMsg],
-    },
-  };
-
-  const gasEstimation = await client.simulate(account.address, [execMsg], undefined);
-  const adjustedGas = Math.floor(gasEstimation * 2);
-  try {
-    const result = await client.signAndBroadcast(account.address, [execMsg], {
-      amount: parseCoins(fees),
-      gas: adjustedGas.toString(),
-    });
-    console.log('Transaction result:', result.rawLog);
-    return result;
-  } catch (error: any) {
-    console.error('Error signing and broadcasting vote:', error.message);
-    return {
-      code: 1,
-      rawLog: error.message,
-    } as DeliverTxResponse;
-  }
-}
-
-async function sendProposalMessage(network: Network, proposal: any) {
-  const chainId = network.chainId;
-  const proposalId = getProposalId(proposal);
-  const proposalTitle = getProposalTitle(proposal);
-  const proposalType = getProposalType(proposal);
-  const proposalUrl = getUrlFromTemplate(network.explorer.proposalUrl, proposalId.toString());
-  const voteOption = await getVoteOptionForProposal(network.endpoints.api, proposalId, network.validator.walletAddress);
-  const votingEndsTime = getVotingEndTime(proposal);
-
-  let message = dedent(`
-    🌐 <b>Network:</b> ${network.prettyName}
-    ⚖️ <b>Scope:</b> ${network.scope}
-    📜 <b>Proposal ID:</b> <a href="${proposalUrl}">${proposalId}</a>
-    🗳 <b>Type:</b> ${proposalType}
-    📃 <b>Title:</b> <a href="${proposalUrl}">${proposalTitle}</a>
-    🕓 <b>Voting ends:</b> ${votingEndsTime}
-    🗳 <b>Your vote:</b> ${getVoteOptionText(voteOption)}    
-  `);
-
-  if (isUpgradeProposal(proposal)) {
-    const upgradeInfo = getUpgradeInfo(proposal);
-    const blockUrl = getUrlFromTemplate(network.explorer.blockUrl, upgradeInfo.height);
-    const upgradeInfoMessage = dedent(`
-      🚀<b>Upgrade Info:</b>
-      <b>Name:</b> ${upgradeInfo.name}
-      <b>Height:</b> <a href="${blockUrl}">${upgradeInfo.height}</a>
-    `);
-    message = message + '\n\n' + upgradeInfoMessage;
-  }
-
-  const opts = {
-    reply_markup: {
-      ...getInlineKeyboardMarkup(chainId, proposalId, voteOption),
-    },
-    parse_mode: 'HTML' as ParseMode,
-    disable_web_page_preview: true,
-  };
-
-  await bot.sendMessage(CHAT_ID, message, opts);
-}
-
-async function handleVoteCommand(callbackQuery: TelegramBot.CallbackQuery, network: Network) {
-  const [_, chainId, option, proposalId] = callbackQuery.data!.split('__');
-
-  const inProgressMessage = await bot.sendMessage(
-    callbackQuery.message?.chat.id!,
-    `⏳ Voting <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.prettyName} (${network.scope})</b>`,
-    {
-      reply_to_message_id: callbackQuery.message?.message_id,
-      parse_mode: 'HTML' as ParseMode,
-    },
-  );
-
-  const cosmosSdkVersion = await getCosmosSdkVersion(network.endpoints.api);
-  const coinType = network.coinType ?? 118; // TODO: add support of coin type
-  const voteOption = VoteOption[Number(option)] as unknown as VoteOption;
-
-  let result;
-  try {
-    result = await vote(
-      network.validator.walletAddress,
-      network.endpoints.rpc,
-      network.prefix,
-      Number(proposalId),
-      voteOption,
-      cosmosSdkVersion,
-      coinType,
-      network.fees,
-    );
-  } catch (e: any) {
-    console.error('Error voting:', e);
-    result = {
-      code: 1,
-      rawLog: e?.message,
-    } as DeliverTxResponse;
-  }
-
-  if (result && result.code === 0) {
-    const opts = {
-      chat_id: callbackQuery.message?.chat.id!,
-      message_id: callbackQuery.message?.message_id,
-      reply_markup: {
-        ...getInlineKeyboardMarkup(chainId, Number(proposalId), voteOption),
-      },
-      parse_mode: 'HTML' as ParseMode,
-      disable_web_page_preview: true,
-    };
-
-    await bot.editMessageReplyMarkup(opts.reply_markup, opts);
-    await bot.deleteMessage(inProgressMessage.chat.id, inProgressMessage.message_id);
-
-    const txUrl = getUrlFromTemplate(network.explorer.txUrl, result.transactionHash);
-    const successMessage = dedent(
-      `🟩 Voted <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.prettyName} (${network.scope})</b>
-        TX hash: <a href="${txUrl}">${result.transactionHash}</a>`,
-    );
-    await bot.sendMessage(callbackQuery.message?.chat.id!, successMessage, {
-      reply_to_message_id: callbackQuery.message?.message_id,
-      parse_mode: 'HTML' as ParseMode,
-      disable_web_page_preview: true,
-    });
-  } else {
-    await bot.deleteMessage(inProgressMessage.chat.id, inProgressMessage.message_id);
-    const errorMessage = dedent(
-      `🟥 Error voting for proposal <b>#${proposalId}</b> in <b>${network.prettyName}:</b>
-        ${result?.rawLog}`,
-    );
-    await bot.sendMessage(callbackQuery.message?.chat.id!, errorMessage, {
-      reply_to_message_id: callbackQuery.message?.message_id,
-      parse_mode: 'HTML' as ParseMode,
-    });
-  }
-}
+const BOT_TOKEN = process.env.BOT_TOKEN!;
+const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+const FETCH_INTERVAL_MS = parseInt(process.env.FETCH_INTERVAL_MS || '60000');
 
 async function fetchNewActiveProposals() {
   console.log('Fetching active proposals from networks...');
@@ -285,4 +50,4 @@ connectDb().then(async () => {
   registerCommandHandlers(bot);
 });
 
-export { bot, handleVoteCommand, sendProposalMessage };
+export { bot };

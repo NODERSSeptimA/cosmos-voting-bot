@@ -1,5 +1,6 @@
 import { UpgradeInfo } from './types';
 import { VoteOption } from 'cosmjs-types/cosmos/gov/v1beta1/gov';
+import { isCosmosSdkNewerOrEqual } from './utils';
 
 function splitCamelCaseWithSpaces(messageType: string): string {
   const lastPart = messageType.split('.').pop();
@@ -127,6 +128,12 @@ function getVotingEndTime(proposal: any): string {
   return 'Unknown';
 }
 
+function getVoteMessageType(cosmosSdkVersion: string): string {
+  return isCosmosSdkNewerOrEqual(cosmosSdkVersion, 'v0.47.0')
+    ? '/cosmos.gov.v1.MsgVote'
+    : '/cosmos.gov.v1beta1.MsgVote';
+}
+
 function getVoteOption(voteOptionString: string): VoteOption {
   switch (voteOptionString) {
     case 'VOTE_OPTION_YES':
@@ -143,6 +150,7 @@ function getVoteOption(voteOptionString: string): VoteOption {
 }
 
 export {
+  getVoteMessageType,
   getProposalId,
   getProposalType,
   getProposalStatus,

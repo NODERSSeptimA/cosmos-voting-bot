@@ -1,7 +1,70 @@
 import axios, { AxiosError } from 'axios';
-import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing';
+import { DirectSecp256k1HdWallet, parseCoins } from '@cosmjs/proto-signing';
 import { VoteOption } from 'cosmjs-types/cosmos/gov/v1beta1/gov';
-import { getVoteOption } from '../proposalUtils';
+import { getVoteMessageType, getVoteOption } from '../proposalUtils';
+import { DeliverTxResponse, SigningStargateClient } from '@cosmjs/stargate';
+import { MsgVote } from 'cosmjs-types/cosmos/gov/v1/tx';
+import { getVoteOptionText } from '../keyboardBuilder';
+
+const MNEMONIC = process.env.MNEMONIC!;
+
+async function vote(
+  validatorWalletAddress: string,
+  rpcEndpoint: string,
+  prefix: string,
+  proposalId: number,
+  voteOption: VoteOption,
+  cosmosSdkVersion: string,
+  coinType: number,
+  fees: string,
+) {
+  const wallet = await DirectSecp256k1HdWallet.fromMnemonic(MNEMONIC, { prefix });
+  const [account] = await wallet.getAccounts();
+  const client = await SigningStargateClient.connectWithSigner(rpcEndpoint, wallet);
+
+  console.log(
+    `Voting for proposal #${proposalId} with option "${getVoteOptionText(voteOption)}" from account ${
+      account.address
+    } using rpc: ${rpcEndpoint}`,
+  );
+
+  const messageType = getVoteMessageType(cosmosSdkVersion);
+  const voteMsg = {
+    typeUrl: messageType,
+    value: MsgVote.encode(
+      MsgVote.fromPartial({
+        proposalId: proposalId as any,
+        voter: validatorWalletAddress,
+        option: voteOption,
+      }),
+    ).finish(),
+  };
+
+  const execMsg = {
+    typeUrl: '/cosmos.authz.v1beta1.MsgExec',
+    value: {
+      grantee: account.address,
+      msgs: [voteMsg],
+    },
+  };
+
+  const gasEstimation = await client.simulate(account.address, [execMsg], undefined);
+  const adjustedGas = Math.floor(gasEstimation * 2);
+  try {
+    const result = await client.signAndBroadcast(account.address, [execMsg], {
+      amount: parseCoins(fees),
+      gas: adjustedGas.toString(),
+    });
+    console.log('Transaction result:', result.rawLog);
+    return result;
+  } catch (error: any) {
+    console.error('Error signing and broadcasting vote:', error.message);
+    return {
+      code: 1,
+      rawLog: error.message,
+    } as DeliverTxResponse;
+  }
+}
 
 async function getActiveProposals(apiEndpoint: string): Promise<any[]> {
   let response;
@@ -96,4 +159,11 @@ async function getVotePermissionGrant(
   return [];
 }
 
-export { getActiveProposals, getCosmosSdkVersion, getWalletAddress, getVoteOptionForProposal, getVotePermissionGrant };
+export {
+  vote,
+  getActiveProposals,
+  getCosmosSdkVersion,
+  getWalletAddress,
+  getVoteOptionForProposal,
+  getVotePermissionGrant,
+};
