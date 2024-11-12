@@ -209,7 +209,7 @@ async function handleVoteCommand(callbackQuery: TelegramBot.CallbackQuery, netwo
 
   const inProgressMessage = await bot.sendMessage(
     callbackQuery.message?.chat.id!,
-    `⏳ Voting <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.name} (${network.scope})</b>`,
+    `⏳ Voting <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.prettyName} (${network.scope})</b>`,
     {
       reply_to_message_id: callbackQuery.message?.message_id,
       parse_mode: 'HTML' as ParseMode,
@@ -255,7 +255,7 @@ async function handleVoteCommand(callbackQuery: TelegramBot.CallbackQuery, netwo
 
     const txUrl = getUrlFromTemplate(network.explorer.txUrl, result.transactionHash);
     const successMessage = dedent(
-      `🟩 Voted <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.name} (${network.scope})</b>
+      `🟩 Voted <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.prettyName} (${network.scope})</b>
         TX hash: <a href="${txUrl}">${result.transactionHash}</a>`,
     );
     await bot.sendMessage(callbackQuery.message?.chat.id!, successMessage, {
@@ -266,7 +266,7 @@ async function handleVoteCommand(callbackQuery: TelegramBot.CallbackQuery, netwo
   } else {
     await bot.deleteMessage(inProgressMessage.chat.id, inProgressMessage.message_id);
     const errorMessage = dedent(
-      `🟥 Error voting for proposal <b>#${proposalId}</b> in <b>${network.name}:</b>
+      `🟥 Error voting for proposal <b>#${proposalId}</b> in <b>${network.prettyName}:</b>
         ${result?.rawLog}`,
     );
     await bot.sendMessage(callbackQuery.message?.chat.id!, errorMessage, {
@@ -280,10 +280,10 @@ async function fetchNewActiveProposals() {
   console.log('Fetching active proposals from networks...');
   const networks = await getNetworks();
 
-  console.log('Networks:', networks.map((network) => `${network.name}(${network.scope})`).join(', '));
+  console.log('Networks:', networks.map((network) => `${network.prettyName}(${network.scope})`).join(', '));
 
   for (const network of networks) {
-    console.log(`Fetching proposals for ${network.name} (${network.scope}). ChainID: ${network.chainId} ...`);
+    console.log(`Fetching proposals for ${network.prettyName} (${network.scope}). ChainID: ${network.chainId} ...`);
     const chainId = network.chainId;
     const proposals = await getActiveProposals(network.endpoints.api);
     for (const proposal of proposals) {

@@ -25,7 +25,7 @@ async function getNetworks(): Promise<Network[]> {
     const networks: Network[] = await response.data.data;
     for (const network of networks) {
       if (!network.endpoints?.api || !network.endpoints?.rpc) {
-        console.error(`Error: API or RPC endpoint not found for network ${network.name} (${network.chainId})`);
+        console.error(`Error: API or RPC endpoint not found for network ${network.prettyName} (${network.chainId})`);
       }
     }
 
