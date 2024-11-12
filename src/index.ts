@@ -34,13 +34,6 @@ const registry = new Registry();
 registry.register('/cosmos.authz.v1beta1.MsgExec', MsgExec);
 registry.register('/cosmos.gov.v1.MsgVote', MsgVote);
 
-enum VoteOptions {
-  VOTE_OPTION_YES = 'VOTE_OPTION_YES',
-  VOTE_OPTION_NO = 'VOTE_OPTION_NO',
-  VOTE_OPTION_NO_WITH_VETO = 'VOTE_OPTION_NO_WITH_VETO',
-  VOTE_OPTION_ABSTAIN = 'VOTE_OPTION_ABSTAIN',
-}
-
 enum VoteButtons {
   VOTE_OPTION_YES = '👍 Yes',
   VOTE_OPTION_NO = '👎 No',
@@ -51,40 +44,40 @@ enum VoteButtons {
 function getInlineKeyboardMarkup(
   chainId: string,
   proposalId: number,
-  option: string,
+  option: VoteOption,
 ): TelegramBot.InlineKeyboardMarkup {
   return {
     inline_keyboard: [
       [
         {
           text:
-            option === VoteOptions.VOTE_OPTION_YES
+            option === VoteOption.VOTE_OPTION_YES
               ? `✅ VOTED: ${VoteButtons.VOTE_OPTION_YES}`
               : VoteButtons.VOTE_OPTION_YES,
-          callback_data: `vote__${chainId}__${VoteOptions.VOTE_OPTION_YES}__${proposalId}`,
+          callback_data: `vote__${chainId}__${VoteOption.VOTE_OPTION_YES}__${proposalId}`,
         },
         {
           text:
-            option === VoteOptions.VOTE_OPTION_NO
+            option === VoteOption.VOTE_OPTION_NO
               ? `✅ VOTED: ${VoteButtons.VOTE_OPTION_NO}`
               : VoteButtons.VOTE_OPTION_NO,
-          callback_data: `vote__${chainId}__${VoteOptions.VOTE_OPTION_NO}__${proposalId}`,
+          callback_data: `vote__${chainId}__${VoteOption.VOTE_OPTION_NO}__${proposalId}`,
         },
       ],
       [
         {
           text:
-            option === VoteOptions.VOTE_OPTION_NO_WITH_VETO
+            option === VoteOption.VOTE_OPTION_NO_WITH_VETO
               ? `✅ VOTED: ${VoteButtons.VOTE_OPTION_NO_WITH_VETO}`
               : VoteButtons.VOTE_OPTION_NO_WITH_VETO,
-          callback_data: `vote__${chainId}__${VoteOptions.VOTE_OPTION_NO_WITH_VETO}__${proposalId}`,
+          callback_data: `vote__${chainId}__${VoteOption.VOTE_OPTION_NO_WITH_VETO}__${proposalId}`,
         },
         {
           text:
-            option === VoteOptions.VOTE_OPTION_ABSTAIN
+            option === VoteOption.VOTE_OPTION_ABSTAIN
               ? `✅ VOTED: ${VoteButtons.VOTE_OPTION_ABSTAIN}`
               : VoteButtons.VOTE_OPTION_ABSTAIN,
-          callback_data: `vote__${chainId}__${VoteOptions.VOTE_OPTION_ABSTAIN}__${proposalId}`,
+          callback_data: `vote__${chainId}__${VoteOption.VOTE_OPTION_ABSTAIN}__${proposalId}`,
         },
       ],
     ],
@@ -96,7 +89,7 @@ async function vote(
   rpcEndpoint: string,
   prefix: string,
   proposalId: number,
-  option: string,
+  voteOption: VoteOption,
   cosmosSdkVersion: string,
   coinType: number,
   fees: string,
@@ -106,24 +99,8 @@ async function vote(
   const client = await SigningStargateClient.connectWithSigner(rpcEndpoint, wallet);
 
   console.log(
-    `Voting for proposal #${proposalId} with option "${option}" from account ${account.address} using rpc: ${rpcEndpoint}`,
+    `Voting for proposal #${proposalId} with option "${voteOption}" from account ${account.address} using rpc: ${rpcEndpoint}`,
   );
-
-  let voteOption;
-  switch (option) {
-    case VoteOptions.VOTE_OPTION_YES:
-      voteOption = VoteOption.VOTE_OPTION_YES;
-      break;
-    case VoteOptions.VOTE_OPTION_ABSTAIN:
-      voteOption = VoteOption.VOTE_OPTION_ABSTAIN;
-      break;
-    case VoteOptions.VOTE_OPTION_NO:
-      voteOption = VoteOption.VOTE_OPTION_NO;
-      break;
-    case VoteOptions.VOTE_OPTION_NO_WITH_VETO:
-      voteOption = VoteOption.VOTE_OPTION_NO_WITH_VETO;
-      break;
-  }
 
   const messageType = getVoteMessageType(cosmosSdkVersion);
   const voteMsg = {
@@ -169,7 +146,7 @@ async function sendProposalMessage(network: Network, proposal: any) {
   const proposalTitle = getProposalTitle(proposal);
   const proposalType = getProposalType(proposal);
   const proposalUrl = getUrlFromTemplate(network.explorer.proposalUrl, proposalId.toString());
-  const option = await getVoteOptionForProposal(network.endpoints.api, proposalId, network.validator.walletAddress);
+  const voteOption = await getVoteOptionForProposal(network.endpoints.api, proposalId, network.validator.walletAddress);
   const votingEndsTime = getVotingEndTime(proposal);
 
   let message = dedent(`
@@ -179,7 +156,7 @@ async function sendProposalMessage(network: Network, proposal: any) {
     🗳 <b>Type:</b> ${proposalType}
     📃 <b>Title:</b> <a href="${proposalUrl}">${proposalTitle}</a>
     🕓 <b>Voting ends:</b> ${votingEndsTime}
-    🗳 <b>Your vote:</b> ${option}    
+    🗳 <b>Your vote:</b> ${voteOption}    
   `);
 
   if (isUpgradeProposal(proposal)) {
@@ -195,7 +172,7 @@ async function sendProposalMessage(network: Network, proposal: any) {
 
   const opts = {
     reply_markup: {
-      ...getInlineKeyboardMarkup(chainId, proposalId, option),
+      ...getInlineKeyboardMarkup(chainId, proposalId, voteOption),
     },
     parse_mode: 'HTML' as ParseMode,
     disable_web_page_preview: true,
@@ -205,7 +182,7 @@ async function sendProposalMessage(network: Network, proposal: any) {
 }
 
 async function handleVoteCommand(callbackQuery: TelegramBot.CallbackQuery, network: Network) {
-  const [action, chainId, option, proposalId] = callbackQuery.data!.split('__');
+  const [_, chainId, option, proposalId] = callbackQuery.data!.split('__');
 
   const inProgressMessage = await bot.sendMessage(
     callbackQuery.message?.chat.id!,
@@ -218,6 +195,7 @@ async function handleVoteCommand(callbackQuery: TelegramBot.CallbackQuery, netwo
 
   const cosmosSdkVersion = await getCosmosSdkVersion(network.endpoints.api);
   const coinType = network.coinType ?? 118; // TODO: add support of coin type
+  const voteOption = VoteOption[Number(option)] as unknown as VoteOption;
 
   let result;
   try {
@@ -226,7 +204,7 @@ async function handleVoteCommand(callbackQuery: TelegramBot.CallbackQuery, netwo
       network.endpoints.rpc,
       network.prefix,
       Number(proposalId),
-      option,
+      voteOption,
       cosmosSdkVersion,
       coinType,
       network.fees,
@@ -244,7 +222,7 @@ async function handleVoteCommand(callbackQuery: TelegramBot.CallbackQuery, netwo
       chat_id: callbackQuery.message?.chat.id!,
       message_id: callbackQuery.message?.message_id,
       reply_markup: {
-        ...getInlineKeyboardMarkup(chainId, Number(proposalId), option),
+        ...getInlineKeyboardMarkup(chainId, Number(proposalId), voteOption),
       },
       parse_mode: 'HTML' as ParseMode,
       disable_web_page_preview: true,
