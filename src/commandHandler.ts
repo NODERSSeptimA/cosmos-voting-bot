@@ -15,6 +15,7 @@ import {
   getProposalType,
   getUpgradeInfo,
   getVoteMessageType,
+  getVoteOptionByNumber,
   getVotingEndTime,
   isUpgradeProposal,
 } from './proposalUtils';
@@ -179,9 +180,11 @@ async function getNetworkDetails(network: Network) {
 async function handleVoteClick(callbackQuery: TelegramBot.CallbackQuery, network: Network) {
   const [_, chainId, option, proposalId] = callbackQuery.data!.split('__');
 
+  const voteOption = getVoteOptionByNumber(Number(option));
+  const voteOptionString = getVoteOptionText(voteOption);
   const inProgressMessage = await bot.sendMessage(
     callbackQuery.message?.chat.id!,
-    `⏳ Voting <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.prettyName} (${network.scope})</b>`,
+    `⏳ Voting <b>${voteOptionString}</b> for proposal <b>#${proposalId}</b> in <b>${network.prettyName} (${network.scope})</b>`,
     {
       reply_to_message_id: callbackQuery.message?.message_id,
       parse_mode: 'HTML' as ParseMode,
@@ -190,8 +193,6 @@ async function handleVoteClick(callbackQuery: TelegramBot.CallbackQuery, network
 
   const cosmosSdkVersion = await getCosmosSdkVersion(network.endpoints.api);
   const coinType = network.coinType ?? 118; // TODO: add support of coin type
-  const voteOption = VoteOption[Number(option)] as unknown as VoteOption;
-
   let result;
   try {
     result = await vote(
@@ -228,7 +229,7 @@ async function handleVoteClick(callbackQuery: TelegramBot.CallbackQuery, network
 
     const txUrl = getUrlFromTemplate(network.explorer.txUrl, result.transactionHash);
     const successMessage = dedent(
-      `🟩 Voted <b>${option}</b> for proposal <b>#${proposalId}</b> in <b>${network.prettyName} (${network.scope})</b>
+      `🟩 Voted <b>${voteOptionString}</b> for proposal <b>#${proposalId}</b> in <b>${network.prettyName} (${network.scope})</b>
         TX hash: <a href="${txUrl}">${result.transactionHash}</a>`,
     );
     await bot.sendMessage(callbackQuery.message?.chat.id!, successMessage, {

@@ -1,7 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import { DirectSecp256k1HdWallet, parseCoins } from '@cosmjs/proto-signing';
 import { VoteOption } from 'cosmjs-types/cosmos/gov/v1beta1/gov';
-import { getVoteMessageType, getVoteOption } from '../proposalUtils';
+import { getVoteMessageType, getVoteOptionByString } from '../proposalUtils';
 import { DeliverTxResponse, SigningStargateClient } from '@cosmjs/stargate';
 import { MsgVote } from 'cosmjs-types/cosmos/gov/v1/tx';
 import { getVoteOptionText } from '../keyboardBuilder';
@@ -114,7 +114,7 @@ async function getVoteOptionForProposal(
   let errorMessage;
   try {
     const response = await axios.get(`${apiEndpoint}/cosmos/gov/v1/proposals/${proposalId}/votes/${walletAddress}`);
-    return getVoteOption(response.data.vote.options[0].option);
+    return getVoteOptionByString(response.data.vote.options[0].option);
   } catch (error: AxiosError | any) {
     errorMessage = error.message;
   }
@@ -123,7 +123,7 @@ async function getVoteOptionForProposal(
     const response = await axios.get(
       `${apiEndpoint}/cosmos/gov/v1beta1/proposals/${proposalId}/votes/${walletAddress}`,
     );
-    return getVoteOption(response.data.vote.options[0].option);
+    return getVoteOptionByString(response.data.vote.options[0].option);
   } catch (error: AxiosError | any) {
     errorMessage = error.message;
   }

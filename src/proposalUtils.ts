@@ -134,7 +134,7 @@ function getVoteMessageType(cosmosSdkVersion: string): string {
     : '/cosmos.gov.v1beta1.MsgVote';
 }
 
-function getVoteOption(voteOptionString: string): VoteOption {
+function getVoteOptionByString(voteOptionString: string): VoteOption {
   switch (voteOptionString) {
     case 'VOTE_OPTION_YES':
       return VoteOption.VOTE_OPTION_YES;
@@ -144,6 +144,21 @@ function getVoteOption(voteOptionString: string): VoteOption {
       return VoteOption.VOTE_OPTION_NO_WITH_VETO;
     case 'VOTE_OPTION_ABSTAIN':
       return VoteOption.VOTE_OPTION_ABSTAIN;
+    default:
+      return VoteOption.VOTE_OPTION_UNSPECIFIED;
+  }
+}
+
+function getVoteOptionByNumber(voteOption: number): VoteOption {
+  switch (voteOption) {
+    case 1:
+      return VoteOption.VOTE_OPTION_YES;
+    case 2:
+      return VoteOption.VOTE_OPTION_ABSTAIN;
+    case 3:
+      return VoteOption.VOTE_OPTION_NO;
+    case 4:
+      return VoteOption.VOTE_OPTION_NO_WITH_VETO;
     default:
       return VoteOption.VOTE_OPTION_UNSPECIFIED;
   }
@@ -159,5 +174,6 @@ export {
   isUpgradeProposal,
   getUpgradeInfo,
   getVotingEndTime,
-  getVoteOption,
+  getVoteOptionByString,
+  getVoteOptionByNumber,
 };
