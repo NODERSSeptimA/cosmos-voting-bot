@@ -266,7 +266,6 @@ async function sendProposalMessage(network: Network, proposal: any) {
     🗳 <b>Type:</b> ${proposalType}
     📃 <b>Title:</b> <a href="${proposalUrl}">${proposalTitle}</a>
     🕓 <b>Voting ends:</b> ${votingEndsTime}
-    🗳 <b>Your vote:</b> ${getVoteOptionText(voteOption)}    
   `);
 
   if (isUpgradeProposal(proposal)) {
