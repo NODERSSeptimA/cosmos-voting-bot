@@ -272,7 +272,7 @@ async function sendProposalMessage(network: Network, proposal: any) {
     const upgradeInfo = getUpgradeInfo(proposal);
     const blockUrl = getUrlFromTemplate(network.explorer.blockUrl, upgradeInfo.height);
     const upgradeInfoMessage = dedent(`
-      🚀<b>Upgrade Info:</b>
+      🚀 <b>Upgrade Info:</b>
       <b>Name:</b> ${upgradeInfo.name}
       <b>Height:</b> <a href="${blockUrl}">${upgradeInfo.height}</a>
     `);
