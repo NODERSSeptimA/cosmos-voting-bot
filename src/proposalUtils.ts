@@ -37,6 +37,12 @@ function getProposalType(proposal: any): string {
     return splitCamelCaseWithSpaces(proposal.content['@type']);
   }
 
+  // for sdk v0.45.x
+  if (proposal.content && proposal.content.type) {
+    const messageType = proposal.content.type.split('/')[1];
+    return splitCamelCaseWithSpaces(messageType);
+  }
+
   return 'Unknown';
 }
 
@@ -68,6 +74,11 @@ function getProposalTitle(proposal: any): string {
     return proposal.content.title;
   }
 
+  // for sdk v0.45.x
+  if (proposal.content.value && proposal.content.value.title) {
+    return proposal.content.value.title;
+  }
+
   return 'Unknown';
 }
 
@@ -85,6 +96,11 @@ function getProposalDescription(proposal: any): string {
 
   if (proposal.content && proposal.content.description) {
     return proposal.content.description;
+  }
+
+  // for sdk v0.45.x
+  if (proposal.content.value && proposal.content.value.description) {
+    return proposal.content.value.description;
   }
 
   return 'Unknown';

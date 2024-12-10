@@ -83,6 +83,14 @@ async function getActiveProposals(apiEndpoint: string): Promise<any[]> {
     errorMessage = error.message;
   }
 
+  // for sdk v0.45.x
+  try {
+    response = await axios.get(`${apiEndpoint}/gov/proposals?status=PROPOSAL_STATUS_VOTING_PERIOD`);
+    return response.data.result;
+  } catch (error: AxiosError | any) {
+    errorMessage = error.message;
+  }
+
   console.error(`Error fetching proposals from ${apiEndpoint}:`, errorMessage);
   return [];
 }
@@ -124,6 +132,14 @@ async function getVoteOptionForProposal(
       `${apiEndpoint}/cosmos/gov/v1beta1/proposals/${proposalId}/votes/${walletAddress}`,
     );
     return getVoteOptionByString(response.data.vote.options[0].option);
+  } catch (error: AxiosError | any) {
+    errorMessage = error.message;
+  }
+
+  // for sdk v0.45.x
+  try {
+    const response = await axios.get(`${apiEndpoint}/gov/proposals/${proposalId}/votes/${walletAddress}`);
+    return getVoteOptionByString(response.data.result.option);
   } catch (error: AxiosError | any) {
     errorMessage = error.message;
   }

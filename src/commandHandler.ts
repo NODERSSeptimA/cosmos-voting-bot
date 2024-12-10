@@ -101,20 +101,18 @@ async function handleActiveProposalsCommand(msg: TelegramBot.Message) {
 
   for (const network of networks) {
     const proposals = await getActiveProposals(network.endpoints.api);
-    const activeProposals = proposals.filter(
-      (proposal: any) => getProposalStatus(proposal) === 'PROPOSAL_STATUS_VOTING_PERIOD',
-    );
-
-    if (activeProposals.length > 0) {
+    if (proposals.length > 0) {
       thereAreActiveProposals = true;
       await bot.sendMessage(msg.chat.id, `List of active proposals in <b>${network.prettyName}:</b>`, {
         parse_mode: 'HTML' as ParseMode,
       });
-      for (const proposal of activeProposals) {
+      for (const proposal of proposals) {
         await sendProposalMessage(network, proposal);
       }
     }
   }
+
+  console.log('Proposals fetched.');
 
   if (!thereAreActiveProposals) {
     await bot.sendMessage(msg.chat.id, 'There are no active proposals in any network.');
