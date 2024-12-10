@@ -83,7 +83,7 @@ async function handleNetworksCommand(msg: TelegramBot.Message) {
   }
 
   const message = dedent`
-      🟩 Scope: <b>${SCOPE}</b>
+      🟢 Scope: <b>${SCOPE}</b>
       Supported networks:
     `;
 
@@ -229,7 +229,7 @@ async function handleVoteClick(callbackQuery: TelegramBot.CallbackQuery, network
 
     const txUrl = getUrlFromTemplate(network.explorer.txUrl, result.transactionHash);
     const successMessage = dedent(
-      `🟩 Voted <b>${voteOptionString}</b> for proposal <b>#${proposalId}</b> in <b>${network.prettyName} (${network.scope})</b>
+      `🟢 Voted <b>${voteOptionString}</b> for proposal <b>#${proposalId}</b> in <b>${network.prettyName} (${network.scope})</b>
         TX hash: <a href="${txUrl}">${result.transactionHash}</a>`,
     );
     await bot.sendMessage(callbackQuery.message?.chat.id!, successMessage, {
@@ -240,7 +240,7 @@ async function handleVoteClick(callbackQuery: TelegramBot.CallbackQuery, network
   } else {
     await bot.deleteMessage(inProgressMessage.chat.id, inProgressMessage.message_id);
     const errorMessage = dedent(
-      `🟥 Error voting for proposal <b>#${proposalId}</b> in <b>${network.prettyName}:</b>
+      `🔴 Error voting for proposal <b>#${proposalId}</b> in <b>${network.prettyName}:</b>
         ${result?.rawLog}`,
     );
     await bot.sendMessage(callbackQuery.message?.chat.id!, errorMessage, {

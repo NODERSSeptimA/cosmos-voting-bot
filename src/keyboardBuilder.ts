@@ -24,7 +24,7 @@ function createVoteButton(
 ): TelegramBot.InlineKeyboardButton {
   const isSelected = voteOption === selectedOption;
   return {
-    text: isSelected ? `✅ VOTED: ${getVoteOptionText(voteOption)}` : getVoteOptionText(voteOption),
+    text: isSelected ? `🟢 VOTED: ${getVoteOptionText(voteOption)}` : getVoteOptionText(voteOption),
     callback_data: `vote_click__${chainId}__${voteOption}__${proposalId}`,
   };
 }

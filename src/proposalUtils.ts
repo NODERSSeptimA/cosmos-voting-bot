@@ -25,7 +25,12 @@ function getProposalType(proposal: any): string {
   }
 
   if (proposal.messages && proposal.messages.length && proposal.messages[0]['@type']) {
-    return splitCamelCaseWithSpaces(proposal.messages[0]['@type']);
+    const message = proposal.messages[0];
+    let messageType = message['@type'];
+    if (messageType.includes('MsgExecLegacyContent')) {
+      messageType = message.content?.['@type'] || messageType;
+    }
+    return splitCamelCaseWithSpaces(messageType);
   }
 
   if (proposal.content && proposal.content['@type']) {
@@ -52,6 +57,13 @@ function getProposalTitle(proposal: any): string {
     return proposal.title;
   }
 
+  if (proposal.messages && proposal.messages.length) {
+    const message = proposal.messages[0];
+    if (message.content?.title) {
+      return message.content.title;
+    }
+  }
+
   if (proposal.content && proposal.content.title) {
     return proposal.content.title;
   }
@@ -64,6 +76,13 @@ function getProposalDescription(proposal: any): string {
     return proposal.summary;
   }
 
+  if (proposal.messages && proposal.messages.length) {
+    const message = proposal.messages[0];
+    if (message.content?.description) {
+      return message.content.description;
+    }
+  }
+
   if (proposal.content && proposal.content.description) {
     return proposal.content.description;
   }
@@ -72,7 +91,7 @@ function getProposalDescription(proposal: any): string {
 }
 
 function isUpgradeProposal(proposal: any): boolean {
-  return getProposalType(proposal).toLowerCase().includes('upgrade');
+  return getProposalType(proposal) === 'Software Upgrade';
 }
 
 function getUpgradeInfo(proposal: any): UpgradeInfo {
