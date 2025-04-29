@@ -8,46 +8,79 @@ on:
 
 jobs:
   deploy:
+    name: Deploy to ${{ matrix.environment }}
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        include:
+          - environment: mainnet-bot
+            scope: 'mainnet'
+            bot_name: 'cosmos-voting-bot-mainnet'
+          - environment: testnet-bot
+            scope: 'testnet'
+            bot_name: 'cosmos-voting-bot-testnet'
+    
+    environment: ${{ matrix.environment }}
+    
     steps:
-      - name: Build and Deploy
+      - name: Build and Deploy ${{ matrix.environment }}
         uses: appleboy/ssh-action@master
         env:
           MNEMONIC: ${{ secrets.MNEMONIC }}
-          SCOPE: 'mainnet'
+          SCOPE: ${{ matrix.scope }}
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ vars.CHAT_ID }}
           REGISTRY_API_URL: ${{ vars.REGISTRY_API_URL }}
           REGISTRY_API_TOKEN: ${{ secrets.REGISTRY_API_TOKEN }}
+          BOT_NAME: ${{ matrix.bot_name }}
+          USERNAME: ${{ secrets.USERNAME }}
         with:
           host: ${{ secrets.HOST }}
           port: ${{ secrets.PORT }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.KEY }}
-          envs: MNEMONIC,SCOPE,BOT_TOKEN,CHAT_ID,REGISTRY_API_URL,REGISTRY_API_TOKEN
+          envs: MNEMONIC,SCOPE,BOT_TOKEN,CHAT_ID,REGISTRY_API_URL,REGISTRY_API_TOKEN,BOT_NAME,USERNAME
           script: |
             # set node env
             export NVM_DIR=~/.nvm
             source ~/.nvm/nvm.sh
-            nvm use 20
+            if ! nvm use 20; then
+              echo "Error: Failed to set Node.js version 20"
+              exit 1
+            fi
             
-            # checkout
+            # checkout and update code
             cd ~/cosmos-voting-bot
-            git pull origin main
+            git fetch origin
+            if ! git checkout main; then
+              echo "Error: Failed to checkout main branch"
+              exit 1
+            fi
+            if ! git pull origin main; then
+              echo "Error: git pull failed due to local changes or conflicts"
+              exit 1
+            fi
+            echo "Current commit: $(git log -1 --pretty=%H)"
             
             # build cosmos-voting-bot
             cd ~/cosmos-voting-bot
-            npm install
-            NODE_ENV=production npm run build
+            if ! npm install; then
+              echo "Error: npm install failed"
+              exit 1
+            fi
+            NODE_ENV=production
+            if ! npm run build; then
+              echo "Error: npm run build failed"
+              exit 1
+            fi
             
             # generate ecosystem.config.json
             cat <<EOT > ~/cosmos-voting-bot/ecosystem.config.json
             {
               "apps": [
                 {
-                  "name": "cosmos-voting-bot",
-                  "cwd": "/home/votingbot/cosmos-voting-bot",
+                  "name": "$BOT_NAME",
+                  "cwd": "/home/$USERNAME/cosmos-voting-bot",
                   "script": "npm",
                   "args": "start",
                   "autorestart": true,
@@ -66,4 +99,8 @@ jobs:
             EOT
             
             # restart pm2
-            pm2 restart ~/cosmos-voting-bot/ecosystem.config.json
+            if ! pm2 restart ~/cosmos-voting-bot/ecosystem.config.json; then
+              echo "Error: pm2 restart failed"
+              exit 1
+            fi
+            echo "Deployment completed successfully"
