@@ -41,6 +41,8 @@ jobs:
           key: ${{ secrets.KEY }}
           envs: MNEMONIC,SCOPE,BOT_TOKEN,CHAT_ID,REGISTRY_API_URL,REGISTRY_API_TOKEN,BOT_NAME,USERNAME
           script: |
+            set -e
+
             # set node env
             export NVM_DIR=~/.nvm
             source ~/.nvm/nvm.sh
